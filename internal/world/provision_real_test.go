@@ -34,6 +34,16 @@ func TestProvisionRealPostgresStarterWorld(t *testing.T) {
 	if err := os.CopyFS(worldDir, os.DirFS("../../worlds/postgres-starter")); err != nil {
 		t.Fatalf("copying bundled world: %v", err)
 	}
+
+	// The test leaves its compose project (container + volume) running; bring
+	// it down after the test so `go test ./...` leaves no wc-* resources
+	// behind. Best-effort: an error here must not mask the test result.
+	project := composeProjectName(filepath.Base(worldDir))
+	t.Cleanup(func() {
+		_, _ = ExecRunner{}.Run(context.Background(), worldDir, nil,
+			"docker", "compose", "-p", project, "down", "-v", "--remove-orphans")
+	})
+
 	p := &Provisioner{}
 	ctx := context.Background()
 

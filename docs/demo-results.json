@@ -55,7 +55,7 @@
     "The integration test provisions the same seed twice and requires identical fingerprints, then edits seed.sql and requires the fingerprint to change."
   ],
   "limitations": [
-    "m2 (checkpoint/diff) and m3 (run + worldcheck.html reconciliation report) are stubs: the commands exist and explain the roadmap instead of executing.",
+    "m2 (checkpoint/diff) and m3 (run + worldcheck.html reconciliation report) are stubs: the commands exist and print the roadmap note to stderr instead of executing.",
     "The demo GIF records the m1 provisioning leg only; the plan's full demo (an agent caught mutating its own world by the diff) arrives with m3 and replaces this recording.",
     "Windows is out of scope for v0.1; macOS and Linux are supported."
   ]

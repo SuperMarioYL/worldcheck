@@ -42,8 +42,10 @@ func newRootCmd() *cobra.Command {
 
 Milestones: provisioning ships today; checkpoint/diff (m2) and the
 verification run with its reconciliation report (m3) are on the roadmap.`,
-		SilenceUsage:  true,
-		SilenceErrors: true,
+		// Suppress the usage dump on errors, but let cobra print the error
+		// itself (as `Error: ...` on stderr) so runtime failures — bad world
+		// dir, missing manifest, stub roadmap notes — are never silent.
+		SilenceUsage: true,
 	}
 	root.SetVersionTemplate("worldcheck version {{.Version}}\n")
 	root.AddCommand(newUpCmd(), newStatusCmd(), newCheckpointCmd(), newDiffCmd(), newRunCmd())
