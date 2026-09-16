@@ -1,0 +1,97 @@
+{
+  "product": "worldcheck",
+  "implementation_version": "0.1.0",
+  "milestone_scope": "m1 (seed world): `up` provisions the bundled postgres-starter world and records its manifest; `status` prints services plus the seeded-state fingerprint. `checkpoint`, `diff`, and `run` are roadmap stubs in this build.",
+  "recorded_at": "2026-09-16T15:09:52Z",
+  "environment": {
+    "os": "macOS (darwin 25.6.0, arm64)",
+    "go": "1.24.1",
+    "docker_server": "27.4.0",
+    "world_image": "postgres:16-alpine"
+  },
+  "prerequisites": [
+    "Docker daemon running",
+    "worldcheck binary: go build ./cmd/worldcheck (or go install github.com/SuperMarioYL/worldcheck/cmd/worldcheck@latest after the first release)"
+  ],
+  "scenario": "Provision the bundled seeded test world, read back its state fingerprint, then edit seed.sql, re-provision, and observe the fingerprint change (the m1 acceptance criterion).",
+  "steps": [
+    {
+      "command": "worldcheck up --world worlds/postgres-starter",
+      "purpose": "reset volumes, start the compose project, apply seed.sql, write manifest.json",
+      "wall_time_seconds": 7.0,
+      "output": [
+        "world postgres-starter provisioned (project wc-postgres-starter)",
+        "  service db (postgres:16-alpine)",
+        "  table projects: 3 rows",
+        "  table tasks: 6 rows",
+        "  table users: 4 rows",
+        "manifest written to manifest.json",
+        "seeded-state fingerprint: 7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+      ]
+    },
+    {
+      "command": "worldcheck status --world worlds/postgres-starter",
+      "purpose": "print services plus the seeded-state fingerprint from the manifest",
+      "output": [
+        "world      postgres-starter",
+        "project    wc-postgres-starter",
+        "seed       seed.sql (sha256:2a2fb32475ae)",
+        "database   app",
+        "provisioned 2026-09-16 15:09:52 UTC (worldcheck 0.1.0)",
+        "",
+        "SERVICE  IMAGE",
+        "db       postgres:16-alpine",
+        "",
+        "TABLE     ROWS",
+        "projects  3",
+        "tasks     6",
+        "users     4",
+        "",
+        "fingerprint (sha256:pgdump-data-only-sorted-lines)",
+        "  7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+      ]
+    },
+    {
+      "command": "echo 'UPDATE tasks SET done = true WHERE project_id = 2;' >> worlds/postgres-starter/seed.sql",
+      "purpose": "simulate the fixture edit an agent (or user) makes",
+      "output": []
+    },
+    {
+      "command": "worldcheck up --world worlds/postgres-starter",
+      "purpose": "re-provision from the edited seed",
+      "wall_time_seconds": 4.5,
+      "output": [
+        "world postgres-starter provisioned (project wc-postgres-starter)",
+        "  service db (postgres:16-alpine)",
+        "  table projects: 3 rows",
+        "  table tasks: 6 rows",
+        "  table users: 4 rows",
+        "manifest written to manifest.json",
+        "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
+      ]
+    },
+    {
+      "command": "worldcheck up --world worlds/postgres-starter",
+      "purpose": "verify reproducibility: same seed reproduces the same fingerprint",
+      "output": [
+        "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
+      ]
+    }
+  ],
+  "results": {
+    "fingerprint_before": "7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4",
+    "fingerprint_after": "9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5",
+    "fingerprint_changed": true,
+    "fingerprint_reproducible": true,
+    "manifest_artifact": "worlds/postgres-starter/manifest.json"
+  },
+  "verification": [
+    "go test ./... — unit tests plus the real-world integration test (TestProvisionRealPostgresStarterWorld) pass on a machine with Docker; unit tests stay green with -short or without a Docker daemon (fake runner).",
+    "The integration test provisions the same seed twice and requires identical fingerprints, then edits seed.sql and requires the fingerprint to change."
+  ],
+  "limitations": [
+    "m2 (checkpoint/diff) and m3 (run + worldcheck.html reconciliation report) are stubs: the commands exist and explain the roadmap instead of executing.",
+    "The demo GIF records the m1 provisioning leg only; the plan's full demo (an agent caught mutating its own world by the diff) arrives with m3 and replaces this recording.",
+    "Windows is out of scope for v0.1; macOS and Linux are supported."
+  ]
+}
