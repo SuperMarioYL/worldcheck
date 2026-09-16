@@ -1,0 +1,29 @@
+# postgres-starter world - the bundled disposable Postgres test world.
+#
+# worldcheck provisions this file as-is with `docker compose -p wc-postgres-starter up`.
+# Contract the provisioner relies on:
+#   - a service named `db` running Postgres (postgres:16-alpine keeps the image
+#     pull inside the 60-second budget)
+#   - POSTGRES_USER / POSTGRES_DB tell worldcheck which credentials and database
+#     the seed and the state fingerprint go through
+# No ports are published to the host on purpose: the world is reached through
+# the compose project (`docker compose -p wc-postgres-starter exec db psql ...`),
+# so two worlds never fight over 5432. Copy this directory and add a `ports:`
+# mapping if your verification command needs a host socket.
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app"]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:
