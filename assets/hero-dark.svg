@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 420" width="920" height="420" role="img" aria-labelledby="tt dd" data-palette="56ace6-6a72e7-acf3f6-25e556183176">
+<title id="tt">worldcheck brand hero</title>
+<desc id="dd">Particles converge on a checkpoint seal; the wordmark worldcheck and its commands sit below.</desc>
+<style>
+  .t  { font-family: 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; }
+  .s  { font-family: -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+  .word { font: 600 56px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #eefdfd; letter-spacing: 1px; }
+  .tag { font: 400 20px -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; fill: #95aec4; letter-spacing: 2px; }
+  .cmd { font: 500 15px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #95aec4; }
+  .k   { fill: #56ace6; }
+  .seal-line { stroke: #56ace6; stroke-width: 2.5; fill: #0c141f; }
+  .plus  { stroke: #acf3f6; stroke-width: 3; }
+  .minus { stroke: #6a72e7; stroke-width: 3; }
+  .halo  { fill: none; stroke: #56ace6; opacity: 0.35; animation: halo 5s ease-in-out infinite; }
+  @keyframes halo { 0%,100% { opacity: 0.15; } 50% { opacity: 0.4; } }
+</style>
+
+<rect width="920" height="420" fill="#050a12"/>
+<rect width="920" height="420" fill="url(#grid-dark)" opacity="0.5"/>
+
+<defs>
+  <pattern id="grid-dark" width="46" height="46" patternUnits="userSpaceOnUse">
+    <path d="M 46 0 L 0 0 0 46" fill="none" stroke="#172e41" stroke-width="1" opacity="0.55"/>
+  </pattern>
+</defs>
+<circle class="pt" cx="564.5" cy="176.0" r="2.2" fill="#56ace6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="4.5s" begin="0.0s" values="0 0; -23.0 0.0; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="338.8" cy="287.0" r="2.9000000000000004" fill="#6a72e7" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="5.4s" begin="-0.8s" values="0 0; 26.7 -24.4; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="472.1" cy="37.8" r="3.6" fill="#acf3f6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="6.3s" begin="-1.6s" values="0 0; -2.7 30.4; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="528.8" cy="265.7" r="2.2" fill="#56ace6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="7.2s" begin="-2.4000000000000004s" values="0 0; -15.1 -19.7; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="289.7" cy="145.9" r="2.9000000000000004" fill="#6a72e7" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="8.1s" begin="-3.2s" values="0 0; 37.5 6.6; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="584.2" cy="97.0" r="3.6" fill="#acf3f6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="4.5s" begin="-4.0s" values="0 0; -27.3 17.4; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="428.4" cy="293.4" r="2.2" fill="#56ace6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="5.4s" begin="-4.800000000000001s" values="0 0; 6.9 -25.8; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="376.4" cy="15.0" r="2.9000000000000004" fill="#6a72e7" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="6.3s" begin="0.0s" values="0 0; 18.4 35.4; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="606.3" cy="229.5" r="3.6" fill="#acf3f6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="7.2s" begin="-0.8s" values="0 0; -32.2 -11.8; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="339.7" cy="225.7" r="2.2" fill="#56ace6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="8.1s" begin="-1.6s" values="0 0; 26.5 -10.9; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="504.3" cy="81.4" r="2.9000000000000004" fill="#6a72e7" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="4.5s" begin="-2.4000000000000004s" values="0 0; -9.7 20.8; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="509.2" cy="332.8" r="3.6" fill="#acf3f6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="5.4s" begin="-3.2s" values="0 0; -10.8 -34.5; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="340.0" cy="106.4" r="2.2" fill="#56ace6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="6.3s" begin="-4.0s" values="0 0; 26.4 15.3; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="570.4" cy="151.7" r="2.9000000000000004" fill="#6a72e7" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="7.2s" begin="-4.800000000000001s" values="0 0; -24.3 5.3; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="360.6" cy="317.4" r="3.6" fill="#acf3f6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="8.1s" begin="0.0s" values="0 0; 21.9 -31.1; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="pt" cx="441.1" cy="30.0" r="2.2" fill="#56ace6" opacity="0.55"><animateTransform attributeName="transform" type="translate" dur="4.5s" begin="-0.8s" values="0 0; 4.2 32.1; 0 0" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1"/></circle>
+<circle class="halo" cx="460.0" cy="176" r="64" stroke-width="1.5"/>
+<circle class="halo" cx="460.0" cy="176" r="86" stroke-width="1"/>
+<g class="seal">
+  <rect class="seal-line" x="414.0" y="130" width="92" height="92" rx="18"/>
+  <path d="M 460.0 150 L 484.0 192 L 436.0 192 Z" fill="none" stroke="#56ace6" stroke-width="3" stroke-linejoin="round"/>
+  <line class="plus"  x1="447.0" y1="180"  x2="459.0" y2="180"/>
+  <line class="minus" x1="463.0"  y1="188" x2="475.0" y2="188"/>
+</g>
+<text class="word" x="460.0" y="294" text-anchor="middle">worldcheck</text>
+<text class="tag" x="460.0" y="328" text-anchor="middle">seeded test world · state fingerprint · mutation audit</text>
+<g text-anchor="middle">
+  <text class="cmd" x="460.0" y="356">worldcheck <tspan class="k">up</tspan> --world worlds/postgres-starter</text>
+  <text class="cmd" x="460.0" y="382">worldcheck <tspan class="k">status</tspan> --world worlds/postgres-starter</text>
+</g>
+
+</svg>

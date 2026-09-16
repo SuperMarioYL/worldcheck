@@ -1,0 +1,38 @@
+{
+  "mode": "auto",
+  "id": "56ace6-6a72e7-acf3f6-25e556183176",
+  "identity": "https://github.com/supermarioyl/worldcheck",
+  "primary": "#56ace6",
+  "secondary": "#6a72e7",
+  "highlight": "#acf3f6",
+  "dark": {
+    "bg": "#050a12",
+    "panel": "#0c141f",
+    "code": "#0a131d",
+    "ink": "#eefdfd",
+    "muted": "#95aec4",
+    "line": "#172e41",
+    "primary": "#56ace6",
+    "secondary": "#6a72e7",
+    "highlight": "#acf3f6",
+    "accent": "#56ace6",
+    "buttonStart": "#3e7ca6",
+    "buttonEnd": "#646bda",
+    "buttonText": "#ffffff"
+  },
+  "light": {
+    "bg": "#f9fcfe",
+    "panel": "#f7fbfe",
+    "code": "#f3f9fd",
+    "ink": "#132230",
+    "muted": "#556f88",
+    "line": "#cbe6f7",
+    "primary": "#3c78a1",
+    "secondary": "#6067d2",
+    "highlight": "#55787a",
+    "accent": "#3c78a1",
+    "buttonStart": "#3e7ca6",
+    "buttonEnd": "#646bda",
+    "buttonText": "#ffffff"
+  }
+}

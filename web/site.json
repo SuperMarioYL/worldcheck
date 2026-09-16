@@ -1,0 +1,33 @@
+{
+  "schema": 3,
+  "name": "worldcheck",
+  "github": "https://github.com/SuperMarioYL/worldcheck",
+  "palette": "auto",
+  "lang": {
+    "primary": "zh",
+    "toggle": true
+  },
+  "hero": {
+    "headline": {
+      "zh": "验证前快照，事后看清它改了什么。",
+      "en": "Snapshot before verify, audit what changed after."
+    },
+    "sub": {
+      "zh": "worldcheck 是编码代理的测试世界检查点工具：给每个任务一份可播种的一次性测试世界，把「测试通过」变成可复核的证据。",
+      "en": "worldcheck is the test-world checkpoint tool for coding agents: a seeded disposable world per task, turning 'tests pass' into auditable evidence."
+    },
+    "href": "#quickstart"
+  },
+  "advantages": [
+    {
+      "title": {
+        "zh": "可播种的一次性测试世界",
+        "en": "A seeded disposable test world"
+      },
+      "body": {
+        "zh": "一条命令从 compose.yml 加 seed.sql 拉起干净的世界，并记录种子清单与状态指纹；改一行种子，指纹必然改变。",
+        "en": "One command stands up a clean world from compose.yml plus seed.sql and records the seed manifest and state fingerprint; edit one seed line and the fingerprint must change."
+      }
+    }
+  ]
+}

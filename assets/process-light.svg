@@ -1,0 +1,66 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 320" width="920" height="320" role="img" aria-labelledby="tt dd" data-palette="56ace6-6a72e7-acf3f6-25e556183176">
+<title id="tt">worldcheck provisioning process</title>
+<desc id="dd">Five ordered steps from volume reset to the recorded manifest, with the seed-edit acceptance note.</desc>
+<style>
+  .t  { font-family: 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; }
+  .s  { font-family: -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+  .step  { fill: #f7fbfe; stroke: #cbe6f7; stroke-width: 1.5; }
+  .num   { fill: #6067d2; }
+  .n     { font: 700 13px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #f9fcfe; }
+  .st    { font: 600 15px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #132230; }
+  .sd    { font: 400 12.5px -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; fill: #556f88; }
+  .flow  { stroke: #3c78a1; stroke-width: 2; fill: none; stroke-dasharray: 7 6; animation: dash 1.6s linear infinite; }
+  .beat  { stroke: #55787a; stroke-width: 2; fill: none; animation: beat 2.2s ease-in-out infinite; }
+  @keyframes dash { to { stroke-dashoffset: -26; } }
+  @keyframes beat { 0%,100% { opacity: 0.25; } 50% { opacity: 0.9; } }
+  .note  { font: 400 14px -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; fill: #556f88; }
+  .nk    { font: 600 14px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #3c78a1; }
+</style>
+
+<rect width="920" height="320" fill="#f9fcfe"/>
+
+<defs>
+  <pattern id="grid-light" width="46" height="46" patternUnits="userSpaceOnUse">
+    <path d="M 46 0 L 0 0 0 46" fill="none" stroke="#cbe6f7" stroke-width="1" opacity="0.55"/>
+  </pattern>
+</defs>
+<rect width="920" height="320" fill="url(#grid-light)" opacity="0.35"/>
+<text x="56" y="46" style="font: 600 20px -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; fill: #132230;">worldcheck up — one command, five mechanical steps</text>
+
+  <rect class="step" x="56" y="74" width="154" height="108" rx="10"/>
+  <circle class="num" cx="80" cy="100" r="12"/>
+  <text class="n" x="80" y="104" text-anchor="middle">1</text>
+  <text class="st" x="72" y="132">reset volumes</text>
+  <text class="sd" x="72" y="152">compose down -v</text>
+  <text class="sd" x="72" y="169">fresh world every run</text><path class="flow" d="M 213 128 L 227 128"/>
+  <rect class="step" x="230" y="74" width="154" height="108" rx="10"/>
+  <circle class="num" cx="254" cy="100" r="12"/>
+  <text class="n" x="254" y="104" text-anchor="middle">2</text>
+  <text class="st" x="246" y="132">start &amp; wait</text>
+  <text class="sd" x="246" y="152">compose up -d --wait</text>
+  <text class="sd" x="246" y="169">healthcheck-gated</text><path class="flow" d="M 387 128 L 401 128"/>
+  <rect class="step" x="404" y="74" width="154" height="108" rx="10"/>
+  <circle class="num" cx="428" cy="100" r="12"/>
+  <text class="n" x="428" y="104" text-anchor="middle">3</text>
+  <text class="st" x="420" y="132">apply seed</text>
+  <text class="sd" x="420" y="152">psql &lt; seed.sql</text>
+  <text class="sd" x="420" y="169">ON_ERROR_STOP</text><path class="flow" d="M 561 128 L 575 128"/>
+  <rect class="step" x="578" y="74" width="154" height="108" rx="10"/>
+  <circle class="num" cx="602" cy="100" r="12"/>
+  <text class="n" x="602" y="104" text-anchor="middle">4</text>
+  <text class="st" x="594" y="132">fingerprint</text>
+  <text class="sd" x="594" y="152">pg_dump → sha256</text>
+  <text class="sd" x="594" y="169">sorted, order-stable</text><path class="flow" d="M 735 128 L 749 128"/>
+  <rect class="step" x="752" y="74" width="154" height="108" rx="10"/>
+  <circle class="num" cx="776" cy="100" r="12"/>
+  <text class="n" x="776" y="104" text-anchor="middle">5</text>
+  <text class="st" x="768" y="132">write manifest</text>
+  <text class="sd" x="768" y="152">manifest.json</text>
+  <text class="sd" x="768" y="169">seed · tables · digest</text>
+<circle class="beat" cx="714" cy="92" r="6"/>
+<rect x="56" y="214" width="812" height="52" rx="10" fill="#f3f9fd" stroke="#cbe6f7"/>
+<text class="note" x="80" y="246">acceptance: <tspan class="nk">edit seed.sql</tspan> → re-run <tspan class="nk">worldcheck up</tspan> → the <tspan class="nk">fingerprint changes</tspan> — nothing else is needed.</text>
+
+</svg>
