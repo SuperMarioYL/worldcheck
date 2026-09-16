@@ -9,13 +9,14 @@
   },
   "hero": {
     "headline": {
-      "zh": "验证前快照，事后看清它改了什么。",
-      "en": "Snapshot before verify, audit what changed after."
+      "zh": "验证前快照，\n事后看清它改了什么。",
+      "en": "Snapshot before verify,\naudit what changed after."
     },
     "sub": {
       "zh": "worldcheck 是编码代理的测试世界检查点工具：给每个任务一份可播种的一次性测试世界，把「测试通过」变成可复核的证据。",
-      "en": "worldcheck is the test-world checkpoint tool for coding agents: a seeded disposable world per task, turning 'tests pass' into auditable evidence."
+      "en": "worldcheck is the test-world checkpoint tool for coding agents: a seeded disposable world per task, turning the pass claim into auditable evidence."
     },
+    "command": "worldcheck up --world worlds/postgres-starter",
     "href": "#quickstart"
   },
   "advantages": [
@@ -25,9 +26,196 @@
         "en": "A seeded disposable test world"
       },
       "body": {
-        "zh": "一条命令从 compose.yml 加 seed.sql 拉起干净的世界，并记录种子清单与状态指纹；改一行种子，指纹必然改变。",
-        "en": "One command stands up a clean world from compose.yml plus seed.sql and records the seed manifest and state fingerprint; edit one seed line and the fingerprint must change."
+        "zh": "一条命令从 compose.yml 加 seed.sql 拉起干净的世界，并把种子清单与状态指纹记进 manifest.json。",
+        "en": "One command stands up a clean world from compose.yml plus seed.sql and records the seed manifest and state fingerprint into manifest.json."
+      },
+      "chips": ["compose", "postgres:16-alpine", "sha256"]
+    },
+    {
+      "title": {
+        "zh": "指纹即证据",
+        "en": "The fingerprint is the evidence"
+      },
+      "body": {
+        "zh": "同一份种子必然得到同一个指纹；改一行种子，指纹必然改变。状态是否被动过，一条哈希就能核验。",
+        "en": "The same seed always yields the same fingerprint; one edited seed line always changes it. Whether the state moved becomes a checkable hash."
+      },
+      "chips": ["pg_dump", "sorted", "deterministic"]
+    }
+  ],
+  "scene": {
+    "kind": "neon-graph",
+    "nodes": ["worldcheck up", "worldcheck status", "manifest.json", "fingerprint"],
+    "caption": {
+      "zh": "从种子到指纹，一条机械链路",
+      "en": "From seed to fingerprint, one mechanical chain"
+    },
+    "fallback": "/assets/hero-dark.svg",
+    "fallbackLight": "/assets/hero-light.svg"
+  },
+  "story": {
+    "intro": {
+      "title": {
+        "zh": "从一份种子开始",
+        "en": "It starts with a seed"
+      },
+      "body": {
+        "zh": "agent 自己搭的验证环境没有基线，也就没有审计。worldcheck 把环境的起点变成工具播种的世界：compose 定义服务，seed.sql 定义状态，manifest.json 记录证据。",
+        "en": "An agent-built verification environment has no baseline, hence no audit. worldcheck turns the environment's origin into a tool-seeded world: compose defines the services, seed.sql defines the state, manifest.json records the evidence."
       }
+    },
+    "sections": [
+      {
+        "title": {
+          "zh": "一条链路，五个机械步骤",
+          "en": "One chain, five mechanical steps"
+        },
+        "body": {
+          "zh": "清空卷、等待健康、灌入种子、抓取状态、写下指纹。没有一步依赖 agent 的自觉，全部由 docker CLI 完成。",
+          "en": "Reset volumes, wait for health, apply the seed, capture the state, write the fingerprint. No step relies on the agent's good faith; the docker CLI does all of it."
+        },
+        "image": {
+          "light": "/assets/process-light.svg",
+          "dark": "/assets/process-dark.svg",
+          "alt": {
+            "zh": "up 命令的五个步骤与种子编辑验收说明",
+            "en": "The five steps of up plus the seed-edit acceptance note"
+          }
+        }
+      },
+      {
+        "title": {
+          "zh": "单个二进制，一个外部依赖",
+          "en": "One binary, one external dependency"
+        },
+        "body": {
+          "zh": "worldcheck 通过 stdio 调用 docker CLI，不用 SDK、不与 daemon 版本耦合；没有常驻进程，没有自己的数据库。",
+          "en": "worldcheck drives the docker CLI over stdio — no SDK, no daemon-version coupling; no server process, no database of its own."
+        },
+        "image": {
+          "light": "/assets/architecture-light.svg",
+          "dark": "/assets/architecture-dark.svg",
+          "alt": {
+            "zh": "shell 到 compose 项目的架构分层图",
+            "en": "Architecture layers from the shell to the compose project"
+          }
+        }
+      }
+    ],
+    "details": [
+      {
+        "title": {
+          "zh": "指纹怎么算",
+          "en": "How the fingerprint is computed"
+        },
+        "body": {
+          "zh": "pg_dump --data-only 的输出去掉注释、空行和带随机 token 的 psql 元命令，剩余行排序后取 sha256。同一种子必同指纹，改一行必变。",
+          "en": "The pg_dump --data-only output drops comments, blank lines and psql meta-commands carrying a per-dump random token; the remaining lines are sorted and hashed with sha256. Same seed, same fingerprint; one edited line changes it."
+        },
+        "code": "sha256:pgdump-data-only-sorted-lines"
+      }
+    ]
+  },
+  "demo": {
+    "title": {
+      "zh": "一次真实的播种会话",
+      "en": "One real seeding session"
+    },
+    "note": {
+      "zh": "输出逐字来自 docs/demo-results.json 记录的真实运行。",
+      "en": "Output lines are verbatim from the recorded run in docs/demo-results.json."
+    },
+    "source": "https://github.com/SuperMarioYL/worldcheck/blob/main/docs/demo-results.json",
+    "steps": [
+      {
+        "label": { "zh": "播种", "en": "Seed" },
+        "body": {
+          "zh": "清空旧世界，起服务，灌种子，写清单。",
+          "en": "Wipe the old world, start services, apply the seed, write the manifest."
+        },
+        "image": "/assets/process-light.svg",
+        "imageDark": "/assets/process-dark.svg",
+        "command": "worldcheck up --world worlds/postgres-starter",
+        "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+      },
+      {
+        "label": { "zh": "查看", "en": "Inspect" },
+        "body": {
+          "zh": "服务、表行数与指纹，全部来自 manifest.json。",
+          "en": "Services, row counts and the fingerprint, all from manifest.json."
+        },
+        "image": "/assets/architecture-light.svg",
+        "imageDark": "/assets/architecture-dark.svg",
+        "command": "worldcheck status --world worlds/postgres-starter",
+        "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-09-16 15:09:52 UTC (worldcheck 0.1.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-data-only-sorted-lines)\n  7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+      },
+      {
+        "label": { "zh": "改种子", "en": "Edit seed" },
+        "body": {
+          "zh": "模拟一次 fixture 修改：把第二组任务标记完成。",
+          "en": "Simulate a fixture edit: mark the second project's tasks done."
+        },
+        "image": "/assets/capabilities-light.svg",
+        "imageDark": "/assets/capabilities-dark.svg",
+        "command": "echo 'UPDATE tasks SET done = true WHERE project_id = 2;' >> worlds/postgres-starter/seed.sql",
+        "output": ""
+      },
+      {
+        "label": { "zh": "重播", "en": "Re-run" },
+        "body": {
+          "zh": "世界是一次性的：重新播种，从零开始。",
+          "en": "The world is disposable: re-seed from scratch."
+        },
+        "image": "/assets/process-light.svg",
+        "imageDark": "/assets/process-dark.svg",
+        "command": "worldcheck up --world worlds/postgres-starter",
+        "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
+      },
+      {
+        "label": { "zh": "复现", "en": "Reproduce" },
+        "body": {
+          "zh": "不改种子再跑一次：指纹分毫不变。",
+          "en": "Run again without touching the seed: the identical fingerprint."
+        },
+        "image": "/assets/hero-light.svg",
+        "imageDark": "/assets/hero-dark.svg",
+        "command": "worldcheck up --world worlds/postgres-starter",
+        "output": "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
+      }
+    ]
+  },
+  "quickstart": {
+    "title": {
+      "zh": "一分钟看到指纹",
+      "en": "A fingerprint in one minute"
+    },
+    "body": {
+      "zh": "需要本机 Docker 在跑；无需任何配置文件。",
+      "en": "Needs a running local Docker daemon; no config file anywhere."
+    },
+    "steps": [
+      {
+        "title": { "zh": "安装", "en": "Install" },
+        "code": "go install github.com/SuperMarioYL/worldcheck/cmd/worldcheck@latest"
+      },
+      {
+        "title": { "zh": "播种世界", "en": "Seed the world" },
+        "code": "worldcheck up --world worlds/postgres-starter"
+      },
+      {
+        "title": { "zh": "查看状态", "en": "Inspect" },
+        "code": "worldcheck status --world worlds/postgres-starter"
+      }
+    ]
+  },
+  "limitations": [
+    {
+      "zh": "m2（checkpoint/diff）与 m3（run + 对账报告）在本版本中是路线图桩命令。",
+      "en": "m2 (checkpoint/diff) and m3 (run + reconciliation report) are roadmap stubs in this release."
+    },
+    {
+      "zh": "v0.1 只审计不回滚；diff 纯机械，无 LLM 判断；仅支持本地 Docker 与 Postgres。",
+      "en": "v0.1 audits and does not rewind; diffs are purely mechanical, no LLM judgment; local Docker and Postgres only."
     }
   ]
 }

@@ -1,0 +1,63 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 500" width="920" height="500" role="img" aria-labelledby="tt dd" data-palette="56ace6-6a72e7-acf3f6-25e556183176">
+<title id="tt">worldcheck capabilities</title>
+<desc id="dd">Implemented commands orbit the core; roadmap pieces float outside the ring, dashed and unconnected.</desc>
+<style>
+  .t  { font-family: 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; }
+  .s  { font-family: -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+  .core  { fill: #0c141f; stroke: #56ace6; stroke-width: 2; }
+  .ring  { fill: none; stroke: #172e41; stroke-width: 1.5; stroke-dasharray: 4 7; animation: orbit 24s linear infinite; }
+  @keyframes orbit { to { stroke-dashoffset: -220; } }
+  .node  { fill: #0a131d; stroke: #56ace6; stroke-width: 1.4; }
+  .ghost { fill: #0a131d; stroke: #95aec4; stroke-width: 1.2; stroke-dasharray: 5 4; }
+  .w     { font: 600 14px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #eefdfd; }
+  .sub   { font: 400 11.5px -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; fill: #95aec4; }
+  .wire  { stroke: #56ace6; stroke-width: 1.2; opacity: 0.5; }
+  .tag2  { font: 700 11px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #6a72e7; }
+  .coret { font: 600 18px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #eefdfd; }
+</style>
+
+<rect width="920" height="500" fill="#050a12"/>
+
+<defs>
+  <pattern id="grid-dark" width="46" height="46" patternUnits="userSpaceOnUse">
+    <path d="M 46 0 L 0 0 0 46" fill="none" stroke="#172e41" stroke-width="1" opacity="0.55"/>
+  </pattern>
+</defs>
+<rect width="920" height="500" fill="url(#grid-dark)" opacity="0.35"/>
+<circle class="ring" cx="460.0" cy="240" r="118"/>
+
+  <line class="wire" x1="460" y1="240" x2="460" y2="54"/>
+  <rect class="node" x="380.0" y="29" width="160" height="50" rx="9"/>
+  <text class="w" x="460" y="51" text-anchor="middle">status</text>
+  <text class="sub" x="460" y="69" text-anchor="middle">services · fingerprint</text>
+  <line class="wire" x1="460" y1="240" x2="656" y2="240"/>
+  <rect class="node" x="576.0" y="215" width="160" height="50" rx="9"/>
+  <text class="w" x="656" y="237" text-anchor="middle">fingerprint</text>
+  <text class="sub" x="656" y="255" text-anchor="middle">pg_dump → sha256</text>
+  <line class="wire" x1="460" y1="240" x2="460" y2="426"/>
+  <rect class="node" x="380.0" y="401" width="160" height="50" rx="9"/>
+  <text class="w" x="460" y="423" text-anchor="middle">up</text>
+  <text class="sub" x="460" y="441" text-anchor="middle">provision + seed</text>
+  <line class="wire" x1="460" y1="240" x2="264" y2="240"/>
+  <rect class="node" x="184.0" y="215" width="160" height="50" rx="9"/>
+  <text class="w" x="264" y="237" text-anchor="middle">manifest.json</text>
+  <text class="sub" x="264" y="255" text-anchor="middle">seed digest · tables</text>
+<g>
+  <rect class="core" x="368.0" y="202" width="184" height="76" rx="14"/>
+  <text class="coret" x="460.0" y="234" text-anchor="middle">worldcheck</text>
+  <text class="sub" x="460.0" y="258" text-anchor="middle">shipped in v0.1 m1</text>
+</g>
+
+  <rect class="ghost" x="14" y="67" width="164" height="34" rx="8"/>
+  <text class="w" x="96" y="89" text-anchor="middle" opacity="0.78">checkpoint <tspan class="tag2" dx="4">m2</tspan></text>
+  <rect class="ghost" x="14" y="111" width="164" height="34" rx="8"/>
+  <text class="w" x="96" y="133" text-anchor="middle" opacity="0.78">diff <tspan class="tag2" dx="4">m2</tspan></text>
+  <rect class="ghost" x="742" y="67" width="164" height="34" rx="8"/>
+  <text class="w" x="824" y="89" text-anchor="middle" opacity="0.78">run <tspan class="tag2" dx="4">m3</tspan></text>
+  <rect class="ghost" x="742" y="111" width="164" height="34" rx="8"/>
+  <text class="w" x="824" y="133" text-anchor="middle" opacity="0.78">worldcheck.html <tspan class="tag2" dx="4">m3</tspan></text>
+<text class="sub" x="460.0" y="480" text-anchor="middle">solid = implemented now · dashed = roadmap (checkpoint/diff, run + reconciliation report)</text>
+
+</svg>

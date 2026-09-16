@@ -19,63 +19,28 @@
       "command": "worldcheck up --world worlds/postgres-starter",
       "purpose": "reset volumes, start the compose project, apply seed.sql, write manifest.json",
       "wall_time_seconds": 7.0,
-      "output": [
-        "world postgres-starter provisioned (project wc-postgres-starter)",
-        "  service db (postgres:16-alpine)",
-        "  table projects: 3 rows",
-        "  table tasks: 6 rows",
-        "  table users: 4 rows",
-        "manifest written to manifest.json",
-        "seeded-state fingerprint: 7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
-      ]
+      "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
     },
     {
       "command": "worldcheck status --world worlds/postgres-starter",
       "purpose": "print services plus the seeded-state fingerprint from the manifest",
-      "output": [
-        "world      postgres-starter",
-        "project    wc-postgres-starter",
-        "seed       seed.sql (sha256:2a2fb32475ae)",
-        "database   app",
-        "provisioned 2026-09-16 15:09:52 UTC (worldcheck 0.1.0)",
-        "",
-        "SERVICE  IMAGE",
-        "db       postgres:16-alpine",
-        "",
-        "TABLE     ROWS",
-        "projects  3",
-        "tasks     6",
-        "users     4",
-        "",
-        "fingerprint (sha256:pgdump-data-only-sorted-lines)",
-        "  7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
-      ]
+      "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-09-16 15:09:52 UTC (worldcheck 0.1.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-data-only-sorted-lines)\n  7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
     },
     {
       "command": "echo 'UPDATE tasks SET done = true WHERE project_id = 2;' >> worlds/postgres-starter/seed.sql",
       "purpose": "simulate the fixture edit an agent (or user) makes",
-      "output": []
+      "output": ""
     },
     {
       "command": "worldcheck up --world worlds/postgres-starter",
       "purpose": "re-provision from the edited seed",
       "wall_time_seconds": 4.5,
-      "output": [
-        "world postgres-starter provisioned (project wc-postgres-starter)",
-        "  service db (postgres:16-alpine)",
-        "  table projects: 3 rows",
-        "  table tasks: 6 rows",
-        "  table users: 4 rows",
-        "manifest written to manifest.json",
-        "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
-      ]
+      "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
     },
     {
       "command": "worldcheck up --world worlds/postgres-starter",
       "purpose": "verify reproducibility: same seed reproduces the same fingerprint",
-      "output": [
-        "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
-      ]
+      "output": "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
     }
   ],
   "results": {

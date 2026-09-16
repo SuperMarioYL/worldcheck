@@ -1,0 +1,73 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 470" width="920" height="470" role="img" aria-labelledby="tt dd" data-palette="56ace6-6a72e7-acf3f6-25e556183176">
+<title id="tt">worldcheck architecture</title>
+<desc id="dd">The shell drives the single worldcheck binary, which execs the docker CLI to run the compose project, apply the seed and record the manifest.</desc>
+<style>
+  .t  { font-family: 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; }
+  .s  { font-family: -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; } }
+
+  .box   { fill: #f7fbfe; stroke: #cbe6f7; stroke-width: 1.5; rx: 10; }
+  .chip  { fill: #f3f9fd; stroke: #3c78a1; stroke-width: 1.2; }
+  .ghost { fill: #f3f9fd; stroke: #556f88; stroke-width: 1; stroke-dasharray: 5 4; }
+  .h  { font: 600 17px -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; fill: #132230; }
+  .m  { font: 400 13px -apple-system,'Segoe UI',Roboto,'PingFang SC','Hiragino Sans GB',sans-serif; fill: #556f88; }
+  .c  { font: 500 14px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #132230; }
+  .k  { fill: #3c78a1; }
+  .km { fill: #556f88; }
+  .flow { stroke: #3c78a1; stroke-width: 2; fill: none; stroke-dasharray: 7 6; animation: dash 1.6s linear infinite; }
+  .wire { stroke: #cbe6f7; stroke-width: 1.5; fill: none; }
+  @keyframes dash { to { stroke-dashoffset: -26; } }
+  .tagr { font: 600 11px 'JetBrains Mono','SF Mono',Menlo,Consolas,monospace; fill: #f9fcfe; }
+</style>
+
+<rect width="920" height="470" fill="#f9fcfe"/>
+
+<defs>
+  <pattern id="grid-light" width="46" height="46" patternUnits="userSpaceOnUse">
+    <path d="M 46 0 L 0 0 0 46" fill="none" stroke="#cbe6f7" stroke-width="1" opacity="0.55"/>
+  </pattern>
+</defs>
+<rect width="920" height="470" fill="url(#grid-light)" opacity="0.35"/>
+
+<!-- layer 1: shell -->
+<g>
+  <rect class="box" x="60" y="28" width="800" height="74" rx="10"/>
+  <text class="h" x="84" y="58">user / agent shell</text>
+  <text class="c" x="84" y="84">$ <tspan class="k">worldcheck</tspan> up --world worlds/postgres-starter</text>
+</g>
+<path class="flow" d="M 460 102 L 460 134"/>
+
+<!-- layer 2: binary -->
+<g>
+  <rect class="box" x="60" y="138" width="800" height="128" rx="10"/>
+  <text class="h" x="84" y="168">worldcheck <tspan class="m">— one Go binary, no config file</tspan></text>
+  <rect class="chip" x="84"  y="186" width="228" height="60" rx="8"/>
+  <text class="c" x="102" y="211">provisioner <tspan class="k">up</tspan></text>
+  <text class="m" x="102" y="232">compose up · seed · manifest</text>
+  <rect class="chip" x="336" y="186" width="228" height="60" rx="8"/>
+  <text class="c" x="354" y="211">status</text>
+  <text class="m" x="354" y="232">services · fingerprint</text>
+  <rect class="ghost" x="588" y="186" width="248" height="60" rx="8"/>
+  <text class="c" x="606" y="211">checkpoint · diff <tspan class="km">run</tspan></text>
+  <text class="m" x="606" y="232">roadmap: m2 / m3</text>
+</g>
+<path class="flow" d="M 460 266 L 460 298"/>
+
+<!-- layer 3: docker -->
+<g>
+  <rect class="box" x="60" y="302" width="800" height="52" rx="10"/>
+  <text class="c" x="84" y="334">docker CLI <tspan class="km">(exec over stdio — no SDK, no daemon coupling)</tspan></text>
+</g>
+<path class="flow" d="M 300 354 L 300 386"/>
+<path class="wire" d="M 660 354 L 660 386"/>
+
+<!-- layer 4: world -->
+<g>
+  <rect class="box" x="60" y="390" width="800" height="60" rx="10"/>
+  <rect class="chip" x="84" y="404" width="200" height="32" rx="7"/>
+  <text class="c" x="100" y="425">db <tspan class="km">postgres:16-alpine</tspan></text>
+  <text class="c" x="300" y="425">project <tspan class="k">wc-postgres-starter</tspan></text>
+  <text class="c" x="560" y="425">seed.sql → db → <tspan class="k">manifest.json</tspan></text>
+</g>
+
+</svg>
