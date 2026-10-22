@@ -1,4 +1,4 @@
-// Package report renders worldcheck results: the terminal tables the m1
+// Package report renders worldcheck results: the terminal tables the m1 and m2
 // commands print today, and (as an m3 stub) the self-contained HTML
 // reconciliation report.
 package report
@@ -40,6 +40,36 @@ func RenderStatus(w io.Writer, m *world.Manifest) error {
 // `up` command ends with.
 func RenderFingerprint(w io.Writer, m *world.Manifest) {
 	fmt.Fprintf(w, "seeded-state fingerprint: %s\n", m.Fingerprint.Value)
+}
+
+// RenderDiff prints a mutation diff as terminal tables: the filesystem A/C/D
+// lists and the row deltas, mapped to the checkpoint they diff against.
+func RenderDiff(w io.Writer, d *world.MutationDiff) error {
+	fmt.Fprintf(w, "checkpoint %s\n", d.Label)
+	fmt.Fprintf(w, "mutations  %s\n", d.Reconcile)
+
+	tw := tabwriter.NewWriter(w, 2, 4, 2, ' ', 0)
+	fmt.Fprintln(tw, "\nKIND\tCONTAINER\tPATH")
+	renderChanges(tw, "ADDED", d.FS.Added)
+	renderChanges(tw, "CHANGED", d.FS.Changed)
+	renderChanges(tw, "DELETED", d.FS.Deleted)
+	fmt.Fprintln(tw, "\nKIND\tROW")
+	renderRows(tw, "INSERTED", d.DBRows.Inserted)
+	renderRows(tw, "UPDATED", d.DBRows.Updated)
+	renderRows(tw, "DELETED", d.DBRows.Deleted)
+	return tw.Flush()
+}
+
+func renderChanges(tw io.Writer, kind string, changes []world.FileChange) {
+	for _, c := range changes {
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", kind, c.Container, c.Path)
+	}
+}
+
+func renderRows(tw io.Writer, kind string, rows []string) {
+	for _, row := range rows {
+		fmt.Fprintf(tw, "%s\t%s\n", kind, row)
+	}
 }
 
 // WriteHTML renders the reconciliation report as a self-contained HTML file:

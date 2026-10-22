@@ -13,7 +13,9 @@ DEMO_HOME="${HOME}/worldcheck-demo"
 mkdir -p "${DEMO_HOME}"
 rm -rf "${DEMO_HOME}/worlds"
 cp -R worlds "${DEMO_HOME}/worlds"
-rm -f "${DEMO_HOME}/worlds/postgres-starter/manifest.json"
+# The recording must start from a world that was never provisioned or
+# checkpointed, or the demo would show a stale fingerprint and an old baseline.
+rm -rf "${DEMO_HOME}/worlds/postgres-starter/manifest.json" "${DEMO_HOME}/worlds/postgres-starter/checkpoints"
 
 go build -o "${DEMO_HOME}/bin/worldcheck" ./cmd/worldcheck
 

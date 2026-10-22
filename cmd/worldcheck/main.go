@@ -1,11 +1,12 @@
 // Command worldcheck is the test-world snapshot and mutation-audit CLI for
 // coding agents.
 //
-// v0.1 milestone coverage:
+// Milestone coverage:
 //   - m1 (implemented): `up` provisions a seeded compose world and records its
 //     manifest; `status` prints the seeded state and its fingerprint.
-//   - m2/m3 (stubs): `checkpoint`, `diff`, and `run` return the roadmap note
-//     until those milestones ship.
+//   - m2 (implemented): `checkpoint` snapshots the world under a label and
+//     `diff` reports the filesystem and row mutations since it.
+//   - m3 (stub): `run` returns the roadmap note until it ships.
 package main
 
 import (
@@ -21,7 +22,7 @@ import (
 
 // version is stamped at build time via -ldflags; the VERSION file is the
 // release source of truth.
-var version = "0.1.0"
+var version = "0.2.0"
 
 func main() {
 	root := newRootCmd()
@@ -37,11 +38,13 @@ func newRootCmd() *cobra.Command {
 		Version: version,
 		Long: `worldcheck gives every agent task a seeded, disposable test world.
 
-  worldcheck up --world worlds/postgres-starter   provision the world and record its manifest
-  worldcheck status --world worlds/postgres-starter   print services plus the seeded-state fingerprint
+  worldcheck up --world worlds/postgres-starter         provision the world and record its manifest
+  worldcheck status --world worlds/postgres-starter     print services plus the seeded-state fingerprint
+  worldcheck checkpoint t1 --world worlds/postgres-starter   snapshot the world under a label
+  worldcheck diff t1 --world worlds/postgres-starter    print the mutations since that checkpoint
 
-Milestones: provisioning ships today; checkpoint/diff (m2) and the
-verification run with its reconciliation report (m3) are on the roadmap.`,
+Milestones: provisioning (m1) and checkpoint/diff (m2) ship today; the
+verification run with its reconciliation report (m3) is on the roadmap.`,
 		// Suppress the usage dump on errors, but let cobra print the error
 		// itself (as `Error: ...` on stderr) so runtime failures — bad world
 		// dir, missing manifest, stub roadmap notes — are never silent.
@@ -109,7 +112,7 @@ func newStatusCmd() *cobra.Command {
 	return cmd
 }
 
-// stubRunE returns the roadmap error shared by the m2/m3 commands. It wraps
+// stubRunE returns the roadmap error shared by the m3 command. It wraps
 // world.ErrNotImplemented so callers can test for it programmatically.
 func stubRunE(milestone, what string) func(cmd *cobra.Command, args []string) error {
 	return func(cmd *cobra.Command, args []string) error {
@@ -119,31 +122,64 @@ func stubRunE(milestone, what string) func(cmd *cobra.Command, args []string) er
 }
 
 func stubNote(milestone string) string {
-	switch milestone {
-	case "m2":
-		return "checkpoint/diff"
-	case "m3":
+	if milestone == "m3" {
 		return "run/reconcile report"
 	}
 	return milestone
 }
 
 func newCheckpointCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "checkpoint <label>",
-		Short: "(m2 roadmap) Snapshot world state under a label",
+	var worldDir string
+	cmd := &cobra.Command{
+		Use:   "checkpoint <label> --world <dir>",
+		Short: "Snapshot the world's filesystem and database state under a label",
 		Args:  cobra.ExactArgs(1),
-		RunE:  stubRunE("m2", "checkpoint"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cp, err := world.CreateCheckpoint(context.Background(), world.ExecRunner{}, worldDir, args[0])
+			if err != nil {
+				return err
+			}
+			containers := map[string]bool{}
+			for _, c := range cp.FSBaseline {
+				containers[c.Container] = true
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "checkpoint %s recorded\n", cp.Label)
+			fmt.Fprintf(cmd.OutOrStdout(), "  filesystem baseline: %d path(s) across %d container(s)\n",
+				len(cp.FSBaseline), len(containers))
+			fmt.Fprintf(cmd.OutOrStdout(), "  database snapshot:   %s\n", shortDigest(cp.DBDumpSHA256))
+			fmt.Fprintf(cmd.OutOrStdout(), "  record:              %s/%s.json\n", world.CheckpointsDir, cp.Label)
+			return nil
+		},
 	}
+	cmd.Flags().StringVar(&worldDir, "world", "", "world directory holding compose.yml and seed.sql (required)")
+	_ = cmd.MarkFlagRequired("world")
+	return cmd
 }
 
 func newDiffCmd() *cobra.Command {
-	return &cobra.Command{
-		Use:   "diff <label>",
-		Short: "(m2 roadmap) Diff world state against a checkpoint label",
+	var worldDir string
+	cmd := &cobra.Command{
+		Use:   "diff <label> --world <dir>",
+		Short: "Diff world state against a checkpoint label",
 		Args:  cobra.ExactArgs(1),
-		RunE:  stubRunE("m2", "diff"),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			diff, err := world.DiffAgainst(context.Background(), world.ExecRunner{}, worldDir, args[0])
+			if err != nil {
+				return err
+			}
+			return report.RenderDiff(cmd.OutOrStdout(), diff)
+		},
 	}
+	cmd.Flags().StringVar(&worldDir, "world", "", "world directory holding compose.yml and seed.sql (required)")
+	_ = cmd.MarkFlagRequired("world")
+	return cmd
+}
+
+func shortDigest(digest string) string {
+	if len(digest) > 12 {
+		return "sha256:" + digest[:12]
+	}
+	return "sha256:" + digest
 }
 
 func newRunCmd() *cobra.Command {

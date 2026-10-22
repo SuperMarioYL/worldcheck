@@ -27,7 +27,7 @@ const ManifestFileName = "manifest.json"
 
 // FingerprintAlgorithm names how the seeded-state fingerprint is derived, so
 // manifests stay self-describing across versions.
-const FingerprintAlgorithm = "sha256:pgdump-data-only-sorted-lines"
+const FingerprintAlgorithm = "sha256:pgdump-schema-and-data-sorted-lines"
 
 // ErrNoManifest is returned when status runs against a world that was never
 // provisioned.
@@ -107,14 +107,16 @@ func SeedDigest(seed []byte) string {
 	return hex.EncodeToString(sum[:])
 }
 
-// ComputeFingerprint derives the seeded-state fingerprint from a
-// `pg_dump --data-only` capture. Comment lines, blank lines, and psql
-// meta-commands that embed a per-dump random token (`\restrict` /
-// `\unrestrict`, emitted by current pg_dump security patches) are dropped,
-// and the remainder is sorted before hashing, so the digest depends on the
-// logical data content rather than dump ordering or session state: identical
-// seeded state produces an identical fingerprint, and any data change — an
-// edited seed.sql, a mutated row — changes it.
+// ComputeFingerprint derives the seeded-state fingerprint from a full pg_dump
+// capture of the world's database — schema and data together, so the digest
+// covers the whole seeded state: a data mutation and a schema-only mutation
+// (an added index, a dropped NOT NULL, a changed default) both move it.
+// Comment lines, blank lines, and psql meta-commands that embed a per-dump
+// random token (`\restrict` / `\unrestrict`, emitted by current pg_dump
+// security patches) are dropped, and the remainder is sorted before hashing, so
+// the digest depends on the logical state rather than dump ordering or session
+// state: identical seeded state produces an identical fingerprint, and any
+// change — an edited seed.sql, a mutated row, an altered schema — changes it.
 func ComputeFingerprint(pgDumpOutput string) string {
 	lines := strings.Split(pgDumpOutput, "\n")
 	kept := make([]string, 0, len(lines))

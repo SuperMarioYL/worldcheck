@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 )
 
 // fakeRunner records the commands Provision issues and answers them the way
@@ -22,6 +23,22 @@ type fakeRunner struct {
 	dumpForSeed func(seed string) string
 	tables      string
 	counts      map[string]int64
+
+	// notReady is how many pg_isready probes to answer "not ready" before
+	// reporting an accepting server; 0 answers ready immediately.
+	notReady        int
+	readinessProbes int
+	// containers is the answer to `docker compose ps --format`, one
+	// "<name> <id>" per line.
+	containers string
+	// diffs maps a container id to its `docker diff` output.
+	diffs map[string]string
+	// dumps are successive pg_dump answers; the last one repeats once the
+	// sequence is exhausted. Empty means fall back to dumpForSeed.
+	dumps []string
+	// primaryKeyRows is the answer to the primary-key catalog query, one
+	// "<table>|<column>" per line.
+	primaryKeyRows string
 }
 
 var countQuery = regexp.MustCompile(`SELECT count\(\*\) FROM "([^"]+)"`)
@@ -34,6 +51,12 @@ func (f *fakeRunner) Run(_ context.Context, dir string, stdin io.Reader, argv ..
 		return "", nil
 	case strings.Contains(joined, "up -d --wait"):
 		return "", nil
+	case strings.Contains(joined, "pg_isready"):
+		f.readinessProbes++
+		if f.readinessProbes <= f.notReady {
+			return "", errors.New("pg_isready: no response")
+		}
+		return "/var/run/postgresql:5432 - accepting connections\n", nil
 	case strings.Contains(joined, "ON_ERROR_STOP"):
 		b, err := io.ReadAll(stdin)
 		if err != nil {
@@ -42,6 +65,13 @@ func (f *fakeRunner) Run(_ context.Context, dir string, stdin io.Reader, argv ..
 		f.seeds = append(f.seeds, string(b))
 		return "", nil
 	case strings.Contains(joined, "pg_dump"):
+		if len(f.dumps) > 0 {
+			out := f.dumps[0]
+			if len(f.dumps) > 1 {
+				f.dumps = f.dumps[1:]
+			}
+			return out, nil
+		}
 		seed := ""
 		if len(f.seeds) > 0 {
 			seed = f.seeds[len(f.seeds)-1]
@@ -49,6 +79,12 @@ func (f *fakeRunner) Run(_ context.Context, dir string, stdin io.Reader, argv ..
 		return f.dumpForSeed(seed), nil
 	case strings.Contains(joined, "information_schema.tables"):
 		return f.tables, nil
+	case strings.Contains(joined, "table_constraints"):
+		return f.primaryKeyRows, nil
+	case strings.Contains(joined, " ps --format"):
+		return f.containers, nil
+	case strings.HasPrefix(joined, "docker diff "):
+		return f.diffs[strings.TrimPrefix(joined, "docker diff ")], nil
 	case strings.Contains(joined, "count(*)"):
 		m := countQuery.FindStringSubmatch(joined)
 		if m == nil {
@@ -132,12 +168,17 @@ func TestProvisionHappyPath(t *testing.T) {
 		t.Errorf("psql stdin must be the seed file content")
 	}
 
-	// Command sequence: reset volumes, start with health waiting, seed, dump.
+	// Command sequence: reset volumes, start, wait for the database to accept
+	// connections, seed, dump. The capture is a full pg_dump — the seeded state
+	// includes the schema, so --data-only would hide a schema mutation.
 	joined := strings.Join(fake.calls, "\n")
-	for _, want := range []string{"down -v", "up -d --wait", "ON_ERROR_STOP", "pg_dump", "--data-only"} {
+	for _, want := range []string{"down -v", "up -d --wait", "pg_isready", "ON_ERROR_STOP", "pg_dump"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("provision sequence missing %q; got:\n%s", want, joined)
 		}
+	}
+	if strings.Contains(joined, "--data-only") {
+		t.Errorf("the state capture must include the schema, so --data-only is wrong; got:\n%s", joined)
 	}
 
 	if _, err := LoadManifest(worldDir); err != nil {
@@ -229,4 +270,118 @@ func TestComposeProjectName(t *testing.T) {
 			t.Errorf("composeProjectName(%q) = %q, want %q", in, got, want)
 		}
 	}
+}
+
+// TestProvisionWaitsForDatabaseReadiness is the fix for a world whose compose
+// file declares no `healthcheck:` — the documented world contract does not
+// require one. `up -d --wait` returns as soon as the container runs, which on a
+// cold volume is before Postgres accepts connections, so the provisioner must
+// probe for readiness itself instead of failing the seed with
+// `database "app" does not exist`.
+func TestProvisionWaitsForDatabaseReadiness(t *testing.T) {
+	worldDir := newTestWorld(t)
+	fake := &fakeRunner{
+		dumpForSeed: func(string) string { return dumpInitial },
+		tables:      "tasks\n",
+		counts:      map[string]int64{"tasks": 1},
+		notReady:    2,
+	}
+	p := &Provisioner{Runner: fake, readyPoll: time.Millisecond, readyTimeout: time.Second}
+
+	if _, err := p.Provision(context.Background(), ProvisionOptions{WorldDir: worldDir, ToolVersion: "test"}); err != nil {
+		t.Fatalf("Provision must wait for the database instead of failing the seed: %v", err)
+	}
+	if fake.readinessProbes != 3 {
+		t.Errorf("readiness probes = %d, want 3 (two not-ready answers, then ready)", fake.readinessProbes)
+	}
+	probe, seed := firstIndex(fake.calls, "pg_isready"), firstIndex(fake.calls, "ON_ERROR_STOP")
+	if probe < 0 || seed < 0 || probe > seed {
+		t.Errorf("the readiness probe must run before the seed is applied; got:\n%s", strings.Join(fake.calls, "\n"))
+	}
+}
+
+func TestProvisionFailsWhenDatabaseNeverBecomesReady(t *testing.T) {
+	worldDir := newTestWorld(t)
+	fake := &fakeRunner{
+		dumpForSeed: func(string) string { return dumpInitial },
+		tables:      "tasks\n",
+		counts:      map[string]int64{"tasks": 1},
+		notReady:    1 << 30,
+	}
+	p := &Provisioner{Runner: fake, readyPoll: time.Millisecond, readyTimeout: 5 * time.Millisecond}
+
+	_, err := p.Provision(context.Background(), ProvisionOptions{WorldDir: worldDir, ToolVersion: "test"})
+	if err == nil {
+		t.Fatal("Provision must fail when the database never accepts connections")
+	}
+	if !strings.Contains(err.Error(), "did not accept connections") {
+		t.Errorf("error must name the readiness timeout, got %v", err)
+	}
+	if firstIndex(fake.calls, "ON_ERROR_STOP") >= 0 {
+		t.Errorf("the seed must not be applied to a database that never answered; got:\n%s", strings.Join(fake.calls, "\n"))
+	}
+}
+
+// TestParseComposeAcceptsBothEnvironmentForms covers the two shapes compose
+// accepts for `environment:`. The list form is what `docker compose config`
+// normalises a mapping into, so a world using it must provision like any other.
+func TestParseComposeAcceptsBothEnvironmentForms(t *testing.T) {
+	cases := map[string]string{
+		"map form":      "services:\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: postgres\n      POSTGRES_DB: app\n",
+		"list form":     "services:\n  db:\n    image: postgres:16-alpine\n    environment:\n      - POSTGRES_USER=postgres\n      - POSTGRES_DB=app\n",
+		"numeric value": "services:\n  db:\n    image: postgres:16-alpine\n    environment:\n      POSTGRES_USER: postgres\n      POSTGRES_PORT: 5432\n",
+	}
+	for name, compose := range cases {
+		t.Run(name, func(t *testing.T) {
+			dir := t.TempDir()
+			if err := os.WriteFile(filepath.Join(dir, "compose.yml"), []byte(compose), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			cf, err := parseCompose(dir)
+			if err != nil {
+				t.Fatalf("parseCompose(%s): %v", name, err)
+			}
+			env := cf.Services["db"].Environment
+			if env["POSTGRES_USER"] != "postgres" {
+				t.Errorf("POSTGRES_USER = %q, want postgres", env["POSTGRES_USER"])
+			}
+			if name == "numeric value" {
+				if env["POSTGRES_PORT"] != "5432" {
+					t.Errorf("POSTGRES_PORT = %q, want \"5432\"", env["POSTGRES_PORT"])
+				}
+				return
+			}
+			if env["POSTGRES_DB"] != "app" {
+				t.Errorf("POSTGRES_DB = %q, want app", env["POSTGRES_DB"])
+			}
+		})
+	}
+}
+
+// TestParseComposeUnreadableEnvironmentIsContractError: an `environment:` in
+// neither accepted shape is a world-contract problem and must be reported as
+// one, not as an opaque YAML unmarshal failure.
+func TestParseComposeUnreadableEnvironmentIsContractError(t *testing.T) {
+	dir := t.TempDir()
+	compose := "services:\n  db:\n    image: postgres:16-alpine\n    environment: POSTGRES_USER=postgres\n"
+	if err := os.WriteFile(filepath.Join(dir, "compose.yml"), []byte(compose), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := parseCompose(dir)
+	var contractErr *WorldDirContractError
+	if !errors.As(err, &contractErr) {
+		t.Fatalf("want a WorldDirContractError, got %v", err)
+	}
+	if !strings.Contains(err.Error(), "KEY=value") {
+		t.Errorf("the error must name the accepted environment shapes, got %v", err)
+	}
+}
+
+func firstIndex(calls []string, substr string) int {
+	for i, c := range calls {
+		if strings.Contains(c, substr) {
+			return i
+		}
+	}
+	return -1
 }

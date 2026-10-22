@@ -52,7 +52,7 @@ func TestManifestRoundTrip(t *testing.T) {
 		World:          "postgres-starter",
 		WorldDir:       dir,
 		ComposeProject: "wc-postgres-starter",
-		ToolVersion:    "0.1.0",
+		ToolVersion:    "9.9.9-test",
 		Services:       []Service{{Name: "db", Image: "postgres:16-alpine"}},
 		Seed:           SeedInfo{File: "seed.sql", Database: "app", SHA256: "abc"},
 		Tables:         []Table{{Name: "users", Rows: 4}},

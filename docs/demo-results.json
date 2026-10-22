@@ -1,8 +1,8 @@
 {
   "product": "worldcheck",
-  "implementation_version": "0.1.0",
-  "milestone_scope": "m1 (seed world): `up` provisions the bundled postgres-starter world and records its manifest; `status` prints services plus the seeded-state fingerprint. `checkpoint`, `diff`, and `run` are roadmap stubs in this build.",
-  "recorded_at": "2026-09-16T15:09:52Z",
+  "implementation_version": "0.2.0",
+  "milestone_scope": "m1 (seed world) and m2 (checkpoint/diff): `up` provisions the bundled postgres-starter world and records its manifest; `status` prints services plus the seeded-state fingerprint; `checkpoint <label>` snapshots the world; `diff <label>` reports the filesystem and row mutations since it. `run` (m3) is a roadmap stub.",
+  "recorded_at": "2026-10-22T19:28:43Z",
   "environment": {
     "os": "macOS (darwin 25.6.0, arm64)",
     "go": "1.24.1",
@@ -11,52 +11,68 @@
   },
   "prerequisites": [
     "Docker daemon running",
-    "worldcheck binary: go build ./cmd/worldcheck (or go install github.com/SuperMarioYL/worldcheck/cmd/worldcheck@latest after the first release)"
+    "worldcheck binary: go build ./cmd/worldcheck (or go install github.com/SuperMarioYL/worldcheck/cmd/worldcheck@latest)"
   ],
-  "scenario": "Provision the bundled seeded test world, read back its state fingerprint, then edit seed.sql, re-provision, and observe the fingerprint change (the m1 acceptance criterion).",
+  "scenario": "Provision the bundled seeded test world, checkpoint it before verification, let an agent bend one seeded row and drop one file to force its own test green, and read back the mutation diff — then edit seed.sql and re-provision to show the fingerprint move (the m1 acceptance criterion).",
   "steps": [
     {
       "command": "worldcheck up --world worlds/postgres-starter",
-      "purpose": "reset volumes, start the compose project, apply seed.sql, write manifest.json",
-      "wall_time_seconds": 7.0,
-      "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+      "purpose": "reset volumes, start the compose project, wait for the database to accept connections, apply seed.sql, write manifest.json",
+      "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
+    },
+    {
+      "command": "worldcheck checkpoint t1 --world worlds/postgres-starter",
+      "purpose": "snapshot the world's filesystem baseline and database state under the label t1",
+      "output": "checkpoint t1 recorded\n  filesystem baseline: 4 path(s) across 1 container(s)\n  database snapshot:   sha256:bbc332815fe7\n  record:              checkpoints/t1.json"
     },
     {
       "command": "worldcheck status --world worlds/postgres-starter",
       "purpose": "print services plus the seeded-state fingerprint from the manifest",
-      "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-09-16 15:09:52 UTC (worldcheck 0.1.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-data-only-sorted-lines)\n  7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+      "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-10-22 19:28:43 UTC (worldcheck 0.2.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-schema-and-data-sorted-lines)\n  bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
+    },
+    {
+      "command": "docker compose -p wc-postgres-starter exec -T db psql -U postgres -d app -q -c 'UPDATE tasks SET done = true WHERE id = 6;'",
+      "purpose": "the agent bends a seeded fixture row to force its own test green",
+      "output": ""
+    },
+    {
+      "command": "docker compose -p wc-postgres-starter exec -T db sh -c 'echo bent by the agent > /tmp/agent-note'",
+      "purpose": "the agent leaves a file behind in the world it was given",
+      "output": ""
+    },
+    {
+      "command": "worldcheck diff t1 --world worlds/postgres-starter",
+      "purpose": "report exactly what the world accumulated since the checkpoint",
+      "output": "checkpoint t1\nmutations  files 1 added / 1 changed / 0 deleted; rows 0 inserted / 1 updated / 0 deleted; schema unchanged\n\nKIND     CONTAINER                 PATH\nADDED    wc-postgres-starter-db-1  /tmp/agent-note\nCHANGED  wc-postgres-starter-db-1  /tmp\n\nKIND     ROW\nUPDATED  tasks[id=6] = 6 | 3 | keep diffs mechanical | f  ->  6 | 3 | keep diffs mechanical | t"
     },
     {
       "command": "echo 'UPDATE tasks SET done = true WHERE project_id = 2;' >> worlds/postgres-starter/seed.sql",
-      "purpose": "simulate the fixture edit an agent (or user) makes",
+      "purpose": "edit the seed, then re-provision",
       "output": ""
     },
     {
       "command": "worldcheck up --world worlds/postgres-starter",
-      "purpose": "re-provision from the edited seed",
-      "wall_time_seconds": 4.5,
-      "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
-    },
-    {
-      "command": "worldcheck up --world worlds/postgres-starter",
-      "purpose": "verify reproducibility: same seed reproduces the same fingerprint",
-      "output": "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
+      "purpose": "the m1 acceptance criterion: an edited seed must move the fingerprint",
+      "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 63d0e70e2f5465aa5f376217b788827bcad18fbf802bd198493ca806ff485eff"
     }
   ],
   "results": {
-    "fingerprint_before": "7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4",
-    "fingerprint_after": "9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5",
-    "fingerprint_changed": true,
+    "fingerprint": "bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d",
     "fingerprint_reproducible": true,
-    "manifest_artifact": "worlds/postgres-starter/manifest.json"
+    "fingerprint_after_seed_edit": "63d0e70e2f5465aa5f376217b788827bcad18fbf802bd198493ca806ff485eff",
+    "checkpoint_record": "worlds/postgres-starter/checkpoints/t1.json",
+    "diff_caught_the_agent_row": "tasks[id=6] = 6 | 3 | keep diffs mechanical | f  ->  6 | 3 | keep diffs mechanical | t",
+    "diff_caught_the_agent_file": "/tmp/agent-note"
   },
   "verification": [
-    "go test ./... — unit tests plus the real-world integration test (TestProvisionRealPostgresStarterWorld) pass on a machine with Docker; unit tests stay green with -short or without a Docker daemon (fake runner).",
-    "The integration test provisions the same seed twice and requires identical fingerprints, then edits seed.sql and requires the fingerprint to change."
+    "go test ./... — unit tests (fake runner, no daemon) plus the real-world integration tests TestProvisionRealPostgresStarterWorld, TestProvisionRealWorldWithoutHealthcheck and TestCheckpointAndDiffRealWorld, which run against a real Docker daemon; unit tests stay green with -short.",
+    "The integration tests provision the same seed twice and require identical fingerprints, then edit seed.sql and require the fingerprint to change; provision a world whose compose file has no healthcheck; and require the checkpoint/diff pair to report exactly one updated row after the agent bends one.",
+    "A schema-only seed edit (appending CREATE INDEX) was also run by hand and moves the fingerprint, which the v0.1 --data-only capture could not do."
   ],
   "limitations": [
-    "m2 (checkpoint/diff) and m3 (run + worldcheck.html reconciliation report) are stubs: the commands exist and print the roadmap note to stderr instead of executing.",
-    "The demo GIF records the m1 provisioning leg only; the plan's full demo (an agent caught mutating its own world by the diff) arrives with m3 and replaces this recording.",
-    "Windows is out of scope for v0.1; macOS and Linux are supported."
+    "m3 (`run` with the pass-plus-mutations reconciliation report and worldcheck.html) is a stub: the command exists and prints the roadmap note instead of executing.",
+    "The filesystem half of a diff reports what `docker diff` sees, which includes the container's own runtime paths (a live Postgres rewrites /tmp and its data directory). The row deltas are the precise signal; the filesystem list is the raw container view.",
+    "The committed GIF is a frame sequence rendered from this real recorded run (this machine's vhs cannot complete an encode); docs/demo.tape plus docs/demo-record.sh produce a true terminal recording where vhs works.",
+    "Windows is out of scope; macOS and Linux are supported."
   ]
 }

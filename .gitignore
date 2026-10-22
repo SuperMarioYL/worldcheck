@@ -4,8 +4,9 @@
 *.test
 *.out
 
-# generated per-world state (written by `worldcheck up`)
+# generated per-world state (written by `worldcheck up` and `worldcheck checkpoint`)
 worlds/*/manifest.json
+worlds/*/checkpoints/
 
 # demo recording scratch
 /tmp-demo/

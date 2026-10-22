@@ -3,6 +3,7 @@ package world
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -33,6 +34,13 @@ func (e *WorldDirContractError) Error() string {
 // the same contract.
 const dbServiceName = "db"
 
+// defaultReadyTimeout bounds how long Provision waits for the world's database
+// to accept connections after `up`; defaultReadyPoll is the gap between probes.
+const (
+	defaultReadyTimeout = 60 * time.Second
+	defaultReadyPoll    = 500 * time.Millisecond
+)
+
 // composeFile is the subset of the compose spec worldcheck needs: service
 // names with their images (recorded in the manifest) and the db service's
 // POSTGRES_USER / POSTGRES_DB environment (used to drive psql and pg_dump).
@@ -41,8 +49,57 @@ type composeFile struct {
 }
 
 type composeService struct {
-	Image       string            `yaml:"image"`
-	Environment map[string]string `yaml:"environment"`
+	Image       string             `yaml:"image"`
+	Environment composeEnvironment `yaml:"environment"`
+}
+
+// composeEnvironment is a service's `environment:` block. Compose accepts two
+// shapes for it — a mapping (`KEY: value`) and a list of `KEY=value` strings,
+// which is also what `docker compose config` normalises a mapping into — so both
+// are folded into one map here. Scalar values are read as strings, the way
+// compose itself treats them.
+type composeEnvironment map[string]string
+
+// UnmarshalYAML accepts both compose forms of `environment:`.
+func (e *composeEnvironment) UnmarshalYAML(node *yaml.Node) error {
+	switch node.Kind {
+	case yaml.MappingNode:
+		var m map[string]any
+		if err := node.Decode(&m); err != nil {
+			return err
+		}
+		out := make(composeEnvironment, len(m))
+		for k, v := range m {
+			if v == nil {
+				out[k] = ""
+				continue
+			}
+			out[k] = fmt.Sprint(v)
+		}
+		*e = out
+		return nil
+	case yaml.SequenceNode:
+		out := make(composeEnvironment, len(node.Content))
+		for _, item := range node.Content {
+			var entry string
+			if err := item.Decode(&entry); err != nil {
+				return fmt.Errorf("environment entry %q is not a KEY=value string", item.Value)
+			}
+			key, value, ok := strings.Cut(entry, "=")
+			if !ok {
+				return fmt.Errorf("environment entry %q is not KEY=value", entry)
+			}
+			out[key] = value
+		}
+		*e = out
+		return nil
+	case yaml.ScalarNode:
+		if node.Tag == "!!null" {
+			*e = nil
+			return nil
+		}
+	}
+	return errors.New("environment must be a mapping or a list of KEY=value strings")
 }
 
 // Runner executes external commands. Production uses ExecRunner, which shells
@@ -84,6 +141,12 @@ type Provisioner struct {
 	Runner Runner
 	// Now stamps the manifest; tests inject a fixed clock. nil means time.Now.
 	Now func() time.Time
+
+	// readyTimeout bounds the post-`up` wait for the database to accept
+	// connections; zero means defaultReadyTimeout.
+	readyTimeout time.Duration
+	// readyPoll is the gap between readiness probes; zero means defaultReadyPoll.
+	readyPoll time.Duration
 }
 
 // ProvisionOptions select the world to provision and stamp the manifest.
@@ -97,7 +160,10 @@ type ProvisionOptions struct {
 // Provision is the m1 leg of the primitive: it always starts from a clean
 // slate — `docker compose down -v` resets the world's volumes first — so a
 // re-run after editing seed.sql re-seeds from scratch and produces a new
-// fingerprint. The world is disposable; up never merges into old state.
+// fingerprint. The world is disposable; up never merges into old state. It
+// waits for the database to accept connections before applying the seed, so a
+// world without a compose `healthcheck` provisions the same way the bundled one
+// does.
 func (p *Provisioner) Provision(ctx context.Context, opts ProvisionOptions) (*Manifest, error) {
 	worldDir := opts.WorldDir
 	worldName := filepath.Base(worldDir)
@@ -112,6 +178,101 @@ func (p *Provisioner) Provision(ctx context.Context, opts ProvisionOptions) (*Ma
 		return nil, &WorldDirContractError{Dir: worldDir, What: "seed.sql not found"}
 	}
 
+	ws, err := resolveWorld(worldDir)
+	if err != nil {
+		return nil, err
+	}
+	project, dbUser, dbName := ws.Project, ws.DBUser, ws.DBName
+
+	// docker compose reads compose.yml from its working directory.
+	run := func(stdin io.Reader, argv ...string) (string, error) {
+		return runner.Run(ctx, worldDir, stdin, argv...)
+	}
+	base := []string{"docker", "compose", "-p", project}
+
+	// Reset the world's volumes. On the very first run nothing exists yet and
+	// docker may fail; that is fine — the `up --wait` below is the real gate
+	// and reports daemon problems itself.
+	_, _ = run(nil, append(slices.Clone(base), "down", "-v", "--remove-orphans")...)
+
+	if _, err := run(nil, append(slices.Clone(base), "up", "-d", "--wait")...); err != nil {
+		return nil, fmt.Errorf("starting compose project %s: %w (is the Docker daemon running?)", project, err)
+	}
+
+	// `up --wait` only waits for containers to be running unless the world's
+	// compose file declares a `healthcheck:`, which the world contract does not
+	// require. On a cold volume Postgres is still initialising at that point, so
+	// gate on the provisioner's own readiness probe before applying the seed.
+	if err := p.waitForDatabase(ctx, run, base, dbUser, dbName); err != nil {
+		return nil, err
+	}
+
+	seedArgv := append(slices.Clone(base),
+		"exec", "-T", dbServiceName,
+		"psql", "-U", dbUser, "-d", dbName, "-v", "ON_ERROR_STOP=1", "-q",
+	)
+	if _, err := run(bytes.NewReader(seed), seedArgv...); err != nil {
+		return nil, fmt.Errorf("applying %s: %w", "seed.sql", err)
+	}
+
+	// The capture is a full pg_dump (schema + data): the seeded state includes
+	// the schema, so a schema-only mutation must move the fingerprint too.
+	dump, err := dumpDatabase(run, base, dbUser, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	tables, err := p.listTables(run, base, dbUser, dbName)
+	if err != nil {
+		return nil, err
+	}
+
+	now := p.Now
+	if now == nil {
+		now = time.Now
+	}
+
+	m := &Manifest{
+		Version:        1,
+		World:          worldName,
+		WorldDir:       worldDir,
+		ComposeProject: project,
+		ToolVersion:    opts.ToolVersion,
+		CreatedAt:      now().UTC(),
+		Services:       ws.Services,
+		Seed: SeedInfo{
+			File:      "seed.sql",
+			Database:  dbName,
+			SHA256:    SeedDigest(seed),
+			AppliedAt: now().UTC(),
+		},
+		Tables: tables,
+		Fingerprint: Fingerprint{
+			Algorithm: FingerprintAlgorithm,
+			Value:     ComputeFingerprint(dump),
+		},
+	}
+	if err := SaveManifest(worldDir, m); err != nil {
+		return nil, err
+	}
+	return m, nil
+}
+
+// worldSettings is a world directory's resolved contract: the compose project
+// its services run under, the database the seed and the snapshots go through,
+// and the services compose will start.
+type worldSettings struct {
+	Project  string
+	DBUser   string
+	DBName   string
+	Services []Service
+}
+
+// resolveWorld reads and validates the world directory contract shared by up,
+// checkpoint and diff: a compose.yml defining a `db` Postgres service, whose
+// POSTGRES_USER / POSTGRES_DB say which credentials and database the seed, the
+// state fingerprint and the checkpoint snapshots go through.
+func resolveWorld(worldDir string) (*worldSettings, error) {
 	compose, err := parseCompose(worldDir)
 	if err != nil {
 		return nil, err
@@ -131,79 +292,55 @@ func (p *Provisioner) Provision(ctx context.Context, opts ProvisionOptions) (*Ma
 	if dbName == "" {
 		dbName = dbUser
 	}
-
-	project := composeProjectName(worldName)
-	// docker compose reads compose.yml from its working directory.
-	run := func(stdin io.Reader, argv ...string) (string, error) {
-		return runner.Run(ctx, worldDir, stdin, argv...)
-	}
-	base := []string{"docker", "compose", "-p", project}
-
-	// Reset the world's volumes. On the very first run nothing exists yet and
-	// docker may fail; that is fine — the `up --wait` below is the real gate
-	// and reports daemon problems itself.
-	_, _ = run(nil, append(slices.Clone(base), "down", "-v", "--remove-orphans")...)
-
-	if _, err := run(nil, append(slices.Clone(base), "up", "-d", "--wait")...); err != nil {
-		return nil, fmt.Errorf("starting compose project %s: %w (is the Docker daemon running?)", project, err)
-	}
-
-	seedArgv := append(slices.Clone(base),
-		"exec", "-T", dbServiceName,
-		"psql", "-U", dbUser, "-d", dbName, "-v", "ON_ERROR_STOP=1", "-q",
-	)
-	if _, err := run(bytes.NewReader(seed), seedArgv...); err != nil {
-		return nil, fmt.Errorf("applying %s: %w", "seed.sql", err)
-	}
-
-	dumpArgv := append(slices.Clone(base),
-		"exec", "-T", dbServiceName,
-		"pg_dump", "-U", dbUser, "--data-only", "--no-owner", "--no-privileges", dbName,
-	)
-	dump, err := run(nil, dumpArgv...)
-	if err != nil {
-		return nil, fmt.Errorf("capturing seeded state: %w", err)
-	}
-
-	tables, err := p.listTables(run, base, dbUser, dbName)
-	if err != nil {
-		return nil, err
-	}
-
-	now := p.Now
-	if now == nil {
-		now = time.Now
-	}
 	services := make([]Service, 0, len(compose.Services))
 	for name, svc := range compose.Services {
 		services = append(services, Service{Name: name, Image: svc.Image})
 	}
 	sortServices(services)
+	return &worldSettings{
+		Project:  composeProjectName(filepath.Base(worldDir)),
+		DBUser:   dbUser,
+		DBName:   dbName,
+		Services: services,
+	}, nil
+}
 
-	m := &Manifest{
-		Version:        1,
-		World:          worldName,
-		WorldDir:       worldDir,
-		ComposeProject: project,
-		ToolVersion:    opts.ToolVersion,
-		CreatedAt:      now().UTC(),
-		Services:       services,
-		Seed: SeedInfo{
-			File:      "seed.sql",
-			Database:  dbName,
-			SHA256:    SeedDigest(seed),
-			AppliedAt: now().UTC(),
-		},
-		Tables: tables,
-		Fingerprint: Fingerprint{
-			Algorithm: FingerprintAlgorithm,
-			Value:     ComputeFingerprint(dump),
-		},
+// waitForDatabase polls pg_isready inside the world's db service until Postgres
+// accepts connections, or the timeout expires. `docker compose up -d --wait`
+// alone is not enough: without a `healthcheck:` in the world's compose file it
+// returns as soon as the container is running, which on a cold volume is before
+// Postgres has created POSTGRES_DB — the seed would then fail with
+// `database "<db>" does not exist`. Probing here keeps the world contract at
+// "a db service plus POSTGRES_USER/POSTGRES_DB".
+func (p *Provisioner) waitForDatabase(ctx context.Context, run func(io.Reader, ...string) (string, error), base []string, dbUser, dbName string) error {
+	timeout := p.readyTimeout
+	if timeout <= 0 {
+		timeout = defaultReadyTimeout
 	}
-	if err := SaveManifest(worldDir, m); err != nil {
-		return nil, err
+	poll := p.readyPoll
+	if poll <= 0 {
+		poll = defaultReadyPoll
 	}
-	return m, nil
+	probe := append(slices.Clone(base), "exec", "-T", dbServiceName, "pg_isready", "-U", dbUser, "-d", dbName)
+	deadline := time.Now().Add(timeout)
+	for {
+		out, err := run(nil, probe...)
+		if err == nil {
+			return nil
+		}
+		if !time.Now().Before(deadline) {
+			detail := strings.TrimSpace(out)
+			if detail == "" {
+				detail = err.Error()
+			}
+			return fmt.Errorf("world database did not accept connections within %s: %s", timeout, detail)
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(poll):
+		}
+	}
 }
 
 func (p *Provisioner) listTables(run func(io.Reader, ...string) (string, error), base []string, dbUser, dbName string) ([]Table, error) {
@@ -249,7 +386,14 @@ func parseCompose(worldDir string) (*composeFile, error) {
 	}
 	var cf composeFile
 	if err := yaml.Unmarshal(data, &cf); err != nil {
-		return nil, fmt.Errorf("parsing compose.yml: %w", err)
+		// A world whose compose.yml uses a shape worldcheck cannot read (e.g. an
+		// `environment:` that is neither a mapping nor a KEY=value list) is a
+		// world-contract problem, not an opaque parse failure.
+		return nil, &WorldDirContractError{
+			Dir: worldDir,
+			What: "compose.yml is not readable as a world definition: it needs a `db` service whose " +
+				"`environment` is a mapping or a list of KEY=value strings (" + err.Error() + ")",
+		}
 	}
 	if len(cf.Services) == 0 {
 		return nil, &WorldDirContractError{Dir: worldDir, What: "compose.yml defines no services"}

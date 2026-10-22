@@ -13,10 +13,10 @@
       "en": "Snapshot before verify,\naudit what changed after."
     },
     "sub": {
-      "zh": "worldcheck 是编码代理的测试世界检查点工具：给每个任务一份可播种的一次性测试世界，把「测试通过」变成可复核的证据。",
-      "en": "worldcheck is the test-world checkpoint tool for coding agents: a seeded disposable world per task, turning the pass claim into auditable evidence."
+      "zh": "worldcheck 是编码代理的测试世界检查点工具：给每个任务一份可播种的一次性测试世界，验证前打一个检查点，验证后列出文件与行级的变更，把「测试通过」变成可复核的证据。",
+      "en": "worldcheck is the test-world checkpoint tool for coding agents: a seeded disposable world per task, a checkpoint before verification, and a diff of what moved after it — turning the pass claim into auditable evidence."
     },
-    "command": "worldcheck up --world worlds/postgres-starter",
+    "command": "worldcheck checkpoint t1 --world worlds/postgres-starter",
     "href": "#quickstart"
   },
   "advantages": [
@@ -26,10 +26,21 @@
         "en": "A seeded disposable test world"
       },
       "body": {
-        "zh": "一条命令从 compose.yml 加 seed.sql 拉起干净的世界，并把种子清单与状态指纹记进 manifest.json。",
-        "en": "One command stands up a clean world from compose.yml plus seed.sql and records the seed manifest and state fingerprint into manifest.json."
+        "zh": "一条命令从 compose.yml 加 seed.sql 拉起干净的世界，等数据库真的就绪再灌种子，并把种子清单与状态指纹记进 manifest.json。",
+        "en": "One command stands up a clean world from compose.yml plus seed.sql, waits until the database really accepts connections, then records the seed manifest and state fingerprint into manifest.json."
       },
       "chips": ["compose", "postgres:16-alpine", "sha256"]
+    },
+    {
+      "title": {
+        "zh": "验证前定格，验证后对账",
+        "en": "Freeze before, diff after"
+      },
+      "body": {
+        "zh": "checkpoint 记下每个容器的文件基线与数据库快照；diff 事后列出文件增删改、按主键对齐的行级增删改，以及 schema 有没有被动过——全部机械可核验。",
+        "en": "checkpoint records each container's filesystem baseline plus a database snapshot; diff then lists file changes, row-level insertions/updates/deletions aligned by primary key, and whether the schema moved — all mechanically checkable."
+      },
+      "chips": ["docker diff", "primary key", "schema-aware"]
     },
     {
       "title": {
@@ -37,18 +48,18 @@
         "en": "The fingerprint is the evidence"
       },
       "body": {
-        "zh": "同一份种子必然得到同一个指纹；改一行种子，指纹必然改变。状态是否被动过，一条哈希就能核验。",
-        "en": "The same seed always yields the same fingerprint; one edited seed line always changes it. Whether the state moved becomes a checkable hash."
+        "zh": "同一份种子必然得到同一个指纹；改数据或只改 schema（加索引、去掉 NOT NULL），指纹同样改变。状态是否被动过，一条哈希就能核验。",
+        "en": "The same seed always yields the same fingerprint; changing data or only the schema — an added index, a dropped NOT NULL — moves it too. Whether the state moved becomes a checkable hash."
       },
-      "chips": ["pg_dump", "sorted", "deterministic"]
+      "chips": ["pg_dump", "schema + data", "deterministic"]
     }
   ],
   "scene": {
     "kind": "neon-graph",
-    "nodes": ["worldcheck up", "worldcheck status", "manifest.json", "fingerprint"],
+    "nodes": ["worldcheck up", "worldcheck checkpoint", "worldcheck diff", "manifest.json", "fingerprint"],
     "caption": {
-      "zh": "从种子到指纹，一条机械链路",
-      "en": "From seed to fingerprint, one mechanical chain"
+      "zh": "播种 → 定格 → 对比，一条机械链路",
+      "en": "Seed, freeze, compare — one mechanical chain"
     },
     "fallback": "/assets/hero-dark.svg",
     "fallbackLight": "/assets/hero-light.svg"
@@ -60,19 +71,19 @@
         "en": "It starts with a seed"
       },
       "body": {
-        "zh": "agent 自己搭的验证环境没有基线，也就没有审计。worldcheck 把环境的起点变成工具播种的世界：compose 定义服务，seed.sql 定义状态，manifest.json 记录证据。",
-        "en": "An agent-built verification environment has no baseline, hence no audit. worldcheck turns the environment's origin into a tool-seeded world: compose defines the services, seed.sql defines the state, manifest.json records the evidence."
+        "zh": "agent 自己搭的验证环境没有基线，也就没有审计。worldcheck 把环境的起点变成工具播种的世界，把验证前的状态变成工具打下的检查点：compose 定义服务，seed.sql 定义状态，checkpoint 定格基线，diff 回答变化。",
+        "en": "An agent-built verification environment has no baseline, hence no audit. worldcheck turns the environment's origin into a tool-seeded world and the pre-verification state into a tool-made checkpoint: compose defines the services, seed.sql defines the state, checkpoint freezes the baseline, diff answers what moved."
       }
     },
     "sections": [
       {
         "title": {
-          "zh": "一条链路，五个机械步骤",
-          "en": "One chain, five mechanical steps"
+          "zh": "一条链路，机械到底",
+          "en": "One chain, mechanical throughout"
         },
         "body": {
-          "zh": "清空卷、等待健康、灌入种子、抓取状态、写下指纹。没有一步依赖 agent 的自觉，全部由 docker CLI 完成。",
-          "en": "Reset volumes, wait for health, apply the seed, capture the state, write the fingerprint. No step relies on the agent's good faith; the docker CLI does all of it."
+          "zh": "清空卷、等数据库就绪、灌入种子、抓取状态、写下指纹；验证前记录文件基线与数据库快照；验证后重新采集并对比。没有一步依赖 agent 的自觉，全部由 docker CLI 与 pg_dump 完成。",
+          "en": "Reset volumes, wait for the database, apply the seed, capture the state, write the fingerprint; record the filesystem baseline and database snapshot before verification; re-capture and compare after. No step relies on the agent's good faith — the docker CLI and pg_dump do all of it."
         },
         "image": {
           "light": "/assets/process-light.svg",
@@ -89,8 +100,8 @@
           "en": "One binary, one external dependency"
         },
         "body": {
-          "zh": "worldcheck 通过 stdio 调用 docker CLI，不用 SDK、不与 daemon 版本耦合；没有常驻进程，没有自己的数据库。",
-          "en": "worldcheck drives the docker CLI over stdio — no SDK, no daemon-version coupling; no server process, no database of its own."
+          "zh": "worldcheck 通过 stdio 调用 docker CLI，不用 SDK、不与 daemon 版本耦合；没有常驻进程，没有自己的数据库。行级对比按主键对齐，主键从数据库目录里读，不是猜的。",
+          "en": "worldcheck drives the docker CLI over stdio — no SDK, no daemon-version coupling; no server process, no database of its own. Rows are aligned by primary key, read from the database catalog rather than guessed."
         },
         "image": {
           "light": "/assets/architecture-light.svg",
@@ -109,17 +120,17 @@
           "en": "How the fingerprint is computed"
         },
         "body": {
-          "zh": "pg_dump --data-only 的输出去掉注释、空行和带随机 token 的 psql 元命令，剩余行排序后取 sha256。同一种子必同指纹，改一行必变。",
-          "en": "The pg_dump --data-only output drops comments, blank lines and psql meta-commands carrying a per-dump random token; the remaining lines are sorted and hashed with sha256. Same seed, same fingerprint; one edited line changes it."
+          "zh": "完整 pg_dump（schema + 数据）的输出，去掉注释、空行和带随机 token 的 psql 元命令，剩余行排序后取 sha256。同一种子必同指纹；改数据或只改 schema 也必变。",
+          "en": "The full pg_dump output (schema plus data) drops comments, blank lines and psql meta-commands carrying a per-dump random token; the remaining lines are sorted and hashed with sha256. Same seed, same fingerprint; a data change or a schema-only change moves it too."
         },
-        "code": "sha256:pgdump-data-only-sorted-lines"
+        "code": "sha256:pgdump-schema-and-data-sorted-lines"
       }
     ]
   },
   "demo": {
     "title": {
-      "zh": "一次真实的播种会话",
-      "en": "One real seeding session"
+      "zh": "一次真实的检查点会话",
+      "en": "One real checkpoint session"
     },
     "note": {
       "zh": "输出逐字来自 docs/demo-results.json 记录的真实运行。",
@@ -130,13 +141,24 @@
       {
         "label": { "zh": "播种", "en": "Seed" },
         "body": {
-          "zh": "清空旧世界，起服务，灌种子，写清单。",
-          "en": "Wipe the old world, start services, apply the seed, write the manifest."
+          "zh": "清空旧世界，起服务，等数据库就绪，灌种子，写清单。",
+          "en": "Wipe the old world, start services, wait for the database, apply the seed, write the manifest."
         },
         "image": "/assets/process-light.svg",
         "imageDark": "/assets/process-dark.svg",
         "command": "worldcheck up --world worlds/postgres-starter",
-        "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+        "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
+      },
+      {
+        "label": { "zh": "定格", "en": "Checkpoint" },
+        "body": {
+          "zh": "验证前记录文件基线与数据库快照。",
+          "en": "Record the filesystem baseline and the database snapshot before verification."
+        },
+        "image": "/assets/architecture-light.svg",
+        "imageDark": "/assets/architecture-dark.svg",
+        "command": "worldcheck checkpoint t1 --world worlds/postgres-starter",
+        "output": "checkpoint t1 recorded\n  filesystem baseline: 4 path(s) across 1 container(s)\n  database snapshot:   sha256:bbc332815fe7\n  record:              checkpoints/t1.json"
       },
       {
         "label": { "zh": "查看", "en": "Inspect" },
@@ -147,40 +169,40 @@
         "image": "/assets/architecture-light.svg",
         "imageDark": "/assets/architecture-dark.svg",
         "command": "worldcheck status --world worlds/postgres-starter",
-        "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-09-16 15:09:52 UTC (worldcheck 0.1.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-data-only-sorted-lines)\n  7d5f34937a7855e218e1ea2ab088e38394f6666d41290651cf50be8a0816dfd4"
+        "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-10-22 19:28:43 UTC (worldcheck 0.2.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-schema-and-data-sorted-lines)\n  bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
+      },
+      {
+        "label": { "zh": "agent 凑绿", "en": "Agent bends it" },
+        "body": {
+          "zh": "模拟一个偷偷改自己 fixture 行、又在世界里留下文件的 agent。",
+          "en": "Simulate an agent flipping its own fixture row and leaving a file behind in the world."
+        },
+        "image": "/assets/capabilities-light.svg",
+        "imageDark": "/assets/capabilities-dark.svg",
+        "command": "docker compose -p wc-postgres-starter exec -T db psql -U postgres -d app -q -c 'UPDATE tasks SET done = true WHERE id = 6;'",
+        "output": ""
+      },
+      {
+        "label": { "zh": "对账", "en": "Diff" },
+        "body": {
+          "zh": "变更对比当场列出那一条被改绿的行，以及 agent 留下的文件。",
+          "en": "The diff lists exactly the row that was bent to green, plus the file the agent left behind."
+        },
+        "image": "/assets/capabilities-light.svg",
+        "imageDark": "/assets/capabilities-dark.svg",
+        "command": "worldcheck diff t1 --world worlds/postgres-starter",
+        "output": "checkpoint t1\nmutations  files 1 added / 1 changed / 0 deleted; rows 0 inserted / 1 updated / 0 deleted; schema unchanged\n\nKIND     CONTAINER                 PATH\nADDED    wc-postgres-starter-db-1  /tmp/agent-note\nCHANGED  wc-postgres-starter-db-1  /tmp\n\nKIND     ROW\nUPDATED  tasks[id=6] = 6 | 3 | keep diffs mechanical | f  ->  6 | 3 | keep diffs mechanical | t"
       },
       {
         "label": { "zh": "改种子", "en": "Edit seed" },
         "body": {
-          "zh": "模拟一次 fixture 修改：把第二组任务标记完成。",
-          "en": "Simulate a fixture edit: mark the second project's tasks done."
-        },
-        "image": "/assets/capabilities-light.svg",
-        "imageDark": "/assets/capabilities-dark.svg",
-        "command": "echo 'UPDATE tasks SET done = true WHERE project_id = 2;' >> worlds/postgres-starter/seed.sql",
-        "output": ""
-      },
-      {
-        "label": { "zh": "重播", "en": "Re-run" },
-        "body": {
-          "zh": "世界是一次性的：重新播种，从零开始。",
-          "en": "The world is disposable: re-seed from scratch."
-        },
-        "image": "/assets/process-light.svg",
-        "imageDark": "/assets/process-dark.svg",
-        "command": "worldcheck up --world worlds/postgres-starter",
-        "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
-      },
-      {
-        "label": { "zh": "复现", "en": "Reproduce" },
-        "body": {
-          "zh": "不改种子再跑一次：指纹分毫不变。",
-          "en": "Run again without touching the seed: the identical fingerprint."
+          "zh": "改一行种子重跑 up：指纹必然改变，且可复现。",
+          "en": "Edit one seed line and re-run up: the fingerprint must change, reproducibly."
         },
         "image": "/assets/hero-light.svg",
         "imageDark": "/assets/hero-dark.svg",
-        "command": "worldcheck up --world worlds/postgres-starter",
-        "output": "seeded-state fingerprint: 9e0f82b6d9f6a412a92956f99844228a186354c1acac9e27a929980bac8bb6a5"
+        "command": "echo 'UPDATE tasks SET done = true WHERE project_id = 2;' >> worlds/postgres-starter/seed.sql && worldcheck up --world worlds/postgres-starter",
+        "output": "seeded-state fingerprint: 63d0e70e2f5465aa5f376217b788827bcad18fbf802bd198493ca806ff485eff"
       }
     ]
   },
@@ -203,19 +225,27 @@
         "code": "worldcheck up --world worlds/postgres-starter"
       },
       {
-        "title": { "zh": "查看状态", "en": "Inspect" },
-        "code": "worldcheck status --world worlds/postgres-starter"
+        "title": { "zh": "验证前定格", "en": "Checkpoint before verification" },
+        "code": "worldcheck checkpoint t1 --world worlds/postgres-starter"
+      },
+      {
+        "title": { "zh": "事后对账", "en": "Diff afterwards" },
+        "code": "worldcheck diff t1 --world worlds/postgres-starter"
       }
     ]
   },
   "limitations": [
     {
-      "zh": "m2（checkpoint/diff）与 m3（run + 对账报告）在本版本中是路线图桩命令。",
-      "en": "m2 (checkpoint/diff) and m3 (run + reconciliation report) are roadmap stubs in this release."
+      "zh": "m3（`run` + worldcheck.html 对账报告）在本版本中是路线图桩命令。",
+      "en": "m3 (`run` plus the worldcheck.html reconciliation report) is a roadmap stub in this release."
     },
     {
-      "zh": "v0.1 只审计不回滚；diff 纯机械，无 LLM 判断；仅支持本地 Docker 与 Postgres。",
-      "en": "v0.1 audits and does not rewind; diffs are purely mechanical, no LLM judgment; local Docker and Postgres only."
+      "zh": "diff 的文件部分是 `docker diff` 的原始视图，包含容器自身的运行期写入（Postgres 会改 /tmp 与数据目录）；行级增删改才是精确信号。",
+      "en": "The filesystem half of a diff is the raw `docker diff` view, including the container's own runtime writes (a live Postgres rewrites /tmp and its data directory); the row deltas are the precise signal."
+    },
+    {
+      "zh": "worldcheck 只审计不回滚；diff 纯机械，无 LLM 判断；仅支持本地 Docker 与 Postgres。",
+      "en": "worldcheck audits and does not rewind; diffs are purely mechanical, no LLM judgment; local Docker and Postgres only."
     }
   ]
 }
