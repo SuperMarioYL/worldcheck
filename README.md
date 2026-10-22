@@ -44,7 +44,7 @@ worldcheck 从源头接手这件事：世界由工具播种，状态由工具度
 
 一个二进制，一个外部依赖（Docker CLI，通过 stdio 调用，不用 SDK，不与 daemon 版本耦合）：
 
-- **provisioner** —— `up` 读取世界目录里的 `compose.yml` 与 `seed.sql`：`docker compose down -v` 清空旧世界，`up -d` 起服务，自己轮询 `pg_isready` 等数据库真的能连上，`psql` 灌入种子，`pg_dump` 抓取完整状态；
+- **provisioner** —— `up` 读取世界目录里的 `compose.yml` 与 `seed.sql`：`docker compose down -v` 清空旧世界，`up -d` 起服务，自己对目标库跑一条真实查询、等它真的能应答（不是等 socket 能连——postgres 镜像的 initdb 临时服务也会接连接），`psql` 灌入种子，`pg_dump` 抓取完整状态；
 - **checkpoint** —— `checkpoint <label>` 记录每个容器的 `docker diff` 文件基线，并把数据库快照存进世界目录的 `checkpoints/`；
 - **differ** —— `diff <label>` 重新采集两者并对比：文件系统的 A/C/D、按主键对齐的行级增删改、schema 是否变化；
 - **manifest / report（终端部分）** —— 种子 sha256、服务与镜像、每张表的行数、整体状态指纹写进 `manifest.json`；`status` 与 `diff` 把它渲染成表格。
@@ -83,7 +83,7 @@ manifest written to manifest.json
 seeded-state fingerprint: bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d
 ```
 
-`up` 永远从零开始：先清空这个世界的卷，再播种；播种前它会自己等数据库就绪，所以你的世界不需要在 compose 里写 `healthcheck`。世界是一次性的，`up` 从不往旧状态上叠加。
+`up` 永远从零开始：先清空这个世界的卷，再播种；播种前它会自己等目标数据库能应答真实查询，所以你的世界不需要在 compose 里写 `healthcheck`。世界是一次性的，`up` 从不往旧状态上叠加。
 
 **2. 验证前打一个检查点：**
 

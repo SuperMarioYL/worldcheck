@@ -44,7 +44,7 @@ worldcheck takes over at the source: the world is seeded by the tool, its state 
 
 One binary, one external dependency (the Docker CLI, invoked over stdio — no SDK, no daemon-version coupling):
 
-- **provisioner** — `up` reads `compose.yml` and `seed.sql` from the world directory: `docker compose down -v` resets the world, `up -d` starts it, a bounded `pg_isready` poll waits until the database really accepts connections, `psql` applies the seed, and `pg_dump` captures the full state;
+- **provisioner** — `up` reads `compose.yml` and `seed.sql` from the world directory: `docker compose down -v` resets the world, `up -d` starts it, a bounded query against the target database waits until it really answers (not merely until the socket accepts — the postgres image's initdb runs a temporary server that does too), `psql` applies the seed, and `pg_dump` captures the full state;
 - **checkpoint** — `checkpoint <label>` records each container's `docker diff` filesystem baseline and stores the database snapshot under `checkpoints/` in the world directory;
 - **differ** — `diff <label>` re-captures both and compares them: filesystem A/C/D, row-level insertions/updates/deletions aligned by primary key, and whether the schema changed;
 - **manifest / report (terminal part)** — the seed sha256, services and images, per-table row counts and the overall state fingerprint go into `manifest.json`; `status` and `diff` render them as tables.
@@ -83,7 +83,7 @@ manifest written to manifest.json
 seeded-state fingerprint: bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d
 ```
 
-`up` always starts from a clean slate: it wipes the world's volumes first, then seeds — and it waits for the database to accept connections before seeding, so your world does not need a `healthcheck` in its compose file. The world is disposable; `up` never merges into old state.
+`up` always starts from a clean slate: it wipes the world's volumes first, then seeds — and it waits until the target database answers a real query before seeding, so your world does not need a `healthcheck` in its compose file. The world is disposable; `up` never merges into old state.
 
 **2. Checkpoint the world before verification:**
 

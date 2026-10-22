@@ -22,11 +22,13 @@ running v0.1.0 against a real Docker daemon.
 
 ### Fixed
 
-- `up` no longer depends on the world's compose `healthcheck`. It waits for the
-  database to accept connections before applying the seed, so a world copied per
-  the documented contract (a `db` service plus `POSTGRES_USER`/`POSTGRES_DB`, no
+- `up` no longer depends on the world's compose `healthcheck`. It waits until the
+  target database answers a real query before applying the seed, so a world copied
+  per the documented contract (a `db` service plus `POSTGRES_USER`/`POSTGRES_DB`, no
   `healthcheck:`) provisions instead of failing with
-  `database "app" does not exist`.
+  `database "app" does not exist`. The probe is a query rather than `pg_isready`
+  because the postgres image's initdb runs a temporary server that accepts
+  connections on the same socket before shutting down again.
 - The seeded-state fingerprint now covers the schema as well as the data: the
   capture is a full `pg_dump`, so an added index, a dropped `NOT NULL` or any
   other schema-only mutation moves the fingerprint instead of reading as

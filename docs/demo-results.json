@@ -17,7 +17,7 @@
   "steps": [
     {
       "command": "worldcheck up --world worlds/postgres-starter",
-      "purpose": "reset volumes, start the compose project, wait for the database to accept connections, apply seed.sql, write manifest.json",
+      "purpose": "reset volumes, start the compose project, wait until the target database answers a real query, apply seed.sql, write manifest.json",
       "output": "world postgres-starter provisioned (project wc-postgres-starter)\n  service db (postgres:16-alpine)\n  table projects: 3 rows\n  table tasks: 6 rows\n  table users: 4 rows\nmanifest written to manifest.json\nseeded-state fingerprint: bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
     },
     {

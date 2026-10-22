@@ -305,13 +305,23 @@ func resolveWorld(worldDir string) (*worldSettings, error) {
 	}, nil
 }
 
-// waitForDatabase polls pg_isready inside the world's db service until Postgres
-// accepts connections, or the timeout expires. `docker compose up -d --wait`
-// alone is not enough: without a `healthcheck:` in the world's compose file it
-// returns as soon as the container is running, which on a cold volume is before
-// Postgres has created POSTGRES_DB — the seed would then fail with
-// `database "<db>" does not exist`. Probing here keeps the world contract at
-// "a db service plus POSTGRES_USER/POSTGRES_DB".
+// waitForDatabase polls a real query against the world's database until it
+// answers, or the timeout expires. Two things make this necessary, and make the
+// obvious probes insufficient:
+//
+//   - `docker compose up -d --wait` alone is not enough: without a `healthcheck:`
+//     in the world's compose file it returns as soon as the container is running,
+//     which on a cold volume is before Postgres has created POSTGRES_DB, and the
+//     seed then fails with `database "<db>" does not exist`.
+//   - `pg_isready` alone is not enough either: the postgres image runs a
+//     temporary server to execute initdb, and that server accepts connections on
+//     the same socket before shutting down again — a probe can therefore see
+//     "accepting connections" and still seed a database that is about to
+//     disappear (`FATAL: the database system is shutting down`).
+//
+// Querying the target database avoids both: it can only succeed once the real
+// server is serving the database the world actually uses. Probing here keeps the
+// world contract at "a db service plus POSTGRES_USER/POSTGRES_DB".
 func (p *Provisioner) waitForDatabase(ctx context.Context, run func(io.Reader, ...string) (string, error), base []string, dbUser, dbName string) error {
 	timeout := p.readyTimeout
 	if timeout <= 0 {
@@ -321,19 +331,20 @@ func (p *Provisioner) waitForDatabase(ctx context.Context, run func(io.Reader, .
 	if poll <= 0 {
 		poll = defaultReadyPoll
 	}
-	probe := append(slices.Clone(base), "exec", "-T", dbServiceName, "pg_isready", "-U", dbUser, "-d", dbName)
+	probe := append(slices.Clone(base), "exec", "-T", dbServiceName,
+		"psql", "-U", dbUser, "-d", dbName, "-t", "-A", "-c", "SELECT 1")
 	deadline := time.Now().Add(timeout)
 	for {
 		out, err := run(nil, probe...)
-		if err == nil {
+		if err == nil && strings.TrimSpace(out) == "1" {
 			return nil
 		}
 		if !time.Now().Before(deadline) {
 			detail := strings.TrimSpace(out)
-			if detail == "" {
+			if detail == "" && err != nil {
 				detail = err.Error()
 			}
-			return fmt.Errorf("world database did not accept connections within %s: %s", timeout, detail)
+			return fmt.Errorf("world database did not answer within %s: %s", timeout, detail)
 		}
 		select {
 		case <-ctx.Done():

@@ -235,7 +235,10 @@ func TestCheckpointAndDiffRealWorld(t *testing.T) {
 }
 
 // stripHealthcheck removes the bundled world's `healthcheck:` block, leaving a
-// compose file that satisfies the documented contract without one.
+// compose file that satisfies the documented contract without one. Only the
+// healthcheck's own (six-space indented) children are dropped — the service's
+// sibling keys such as `volumes:` must survive, or the fixture would quietly
+// test a different world than the one it claims to.
 func stripHealthcheck(t *testing.T, compose string) string {
 	t.Helper()
 	lines := strings.Split(compose, "\n")
@@ -247,12 +250,19 @@ func stripHealthcheck(t *testing.T, compose string) string {
 			continue
 		}
 		if skipping {
-			if strings.HasPrefix(line, "    ") || strings.TrimSpace(line) == "" {
+			if strings.HasPrefix(line, "      ") {
 				continue
 			}
 			skipping = false
 		}
 		out = append(out, line)
 	}
-	return strings.Join(out, "\n")
+	stripped := strings.Join(out, "\n")
+	if strings.Contains(stripped, "healthcheck") {
+		t.Fatal("fixture still declares a healthcheck")
+	}
+	if !strings.Contains(stripped, "    volumes:") {
+		t.Fatal("fixture lost the service's volumes mapping")
+	}
+	return stripped
 }

@@ -24,8 +24,8 @@ type fakeRunner struct {
 	tables      string
 	counts      map[string]int64
 
-	// notReady is how many pg_isready probes to answer "not ready" before
-	// reporting an accepting server; 0 answers ready immediately.
+	// notReady is how many readiness probes to answer "not ready" before
+	// reporting a serving database; 0 answers ready immediately.
 	notReady        int
 	readinessProbes int
 	// containers is the answer to `docker compose ps --format`, one
@@ -51,12 +51,14 @@ func (f *fakeRunner) Run(_ context.Context, dir string, stdin io.Reader, argv ..
 		return "", nil
 	case strings.Contains(joined, "up -d --wait"):
 		return "", nil
-	case strings.Contains(joined, "pg_isready"):
+	case strings.Contains(joined, "SELECT 1"):
+		// The readiness probe: a real query against the target database, which
+		// only answers once that database is actually serving.
 		f.readinessProbes++
 		if f.readinessProbes <= f.notReady {
-			return "", errors.New("pg_isready: no response")
+			return "", errors.New("psql: FATAL:  the database system is shutting down")
 		}
-		return "/var/run/postgresql:5432 - accepting connections\n", nil
+		return "1\n", nil
 	case strings.Contains(joined, "ON_ERROR_STOP"):
 		b, err := io.ReadAll(stdin)
 		if err != nil {
@@ -172,7 +174,7 @@ func TestProvisionHappyPath(t *testing.T) {
 	// connections, seed, dump. The capture is a full pg_dump — the seeded state
 	// includes the schema, so --data-only would hide a schema mutation.
 	joined := strings.Join(fake.calls, "\n")
-	for _, want := range []string{"down -v", "up -d --wait", "pg_isready", "ON_ERROR_STOP", "pg_dump"} {
+	for _, want := range []string{"down -v", "up -d --wait", "SELECT 1", "ON_ERROR_STOP", "pg_dump"} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("provision sequence missing %q; got:\n%s", want, joined)
 		}
@@ -275,9 +277,14 @@ func TestComposeProjectName(t *testing.T) {
 // TestProvisionWaitsForDatabaseReadiness is the fix for a world whose compose
 // file declares no `healthcheck:` — the documented world contract does not
 // require one. `up -d --wait` returns as soon as the container runs, which on a
-// cold volume is before Postgres accepts connections, so the provisioner must
-// probe for readiness itself instead of failing the seed with
+// cold volume is before Postgres accepts connections, so the provisioner probes
+// the database itself instead of failing the seed with
 // `database "app" does not exist`.
+//
+// The first two probe answers here are the postgres image's initdb window: a
+// connection that reaches a server about to shut down. The probe must read that
+// as "not ready yet" and keep polling — the case `pg_isready` gets wrong, because
+// the temporary server accepts connections on the same socket.
 func TestProvisionWaitsForDatabaseReadiness(t *testing.T) {
 	worldDir := newTestWorld(t)
 	fake := &fakeRunner{
@@ -294,7 +301,7 @@ func TestProvisionWaitsForDatabaseReadiness(t *testing.T) {
 	if fake.readinessProbes != 3 {
 		t.Errorf("readiness probes = %d, want 3 (two not-ready answers, then ready)", fake.readinessProbes)
 	}
-	probe, seed := firstIndex(fake.calls, "pg_isready"), firstIndex(fake.calls, "ON_ERROR_STOP")
+	probe, seed := firstIndex(fake.calls, "SELECT 1"), firstIndex(fake.calls, "ON_ERROR_STOP")
 	if probe < 0 || seed < 0 || probe > seed {
 		t.Errorf("the readiness probe must run before the seed is applied; got:\n%s", strings.Join(fake.calls, "\n"))
 	}
@@ -314,7 +321,7 @@ func TestProvisionFailsWhenDatabaseNeverBecomesReady(t *testing.T) {
 	if err == nil {
 		t.Fatal("Provision must fail when the database never accepts connections")
 	}
-	if !strings.Contains(err.Error(), "did not accept connections") {
+	if !strings.Contains(err.Error(), "did not answer") {
 		t.Errorf("error must name the readiness timeout, got %v", err)
 	}
 	if firstIndex(fake.calls, "ON_ERROR_STOP") >= 0 {
