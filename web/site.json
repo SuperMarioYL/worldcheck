@@ -37,8 +37,8 @@
         "en": "Freeze before, diff after"
       },
       "body": {
-        "zh": "checkpoint 记下每个容器的文件基线与数据库快照；diff 事后列出文件增删改、按主键对齐的行级增删改，以及 schema 有没有被动过——全部机械可核验。",
-        "en": "checkpoint records each container's filesystem baseline plus a database snapshot; diff then lists file changes, row-level insertions/updates/deletions aligned by primary key, and whether the schema moved — all mechanically checkable."
+        "zh": "checkpoint 记下每个容器的文件基线与数据库快照，快照带 sha256，diff 会先核验它和记录一致；diff 事后列出文件增删改、按主键对齐的行级增删改、序列推进，以及 schema 有没有被动过——全部机械可核验。",
+        "en": "checkpoint records each container's filesystem baseline plus a database snapshot, whose sha256 diff verifies against the record before comparing; diff then lists file changes, row-level insertions/updates/deletions aligned by primary key, advanced sequences, and whether the schema moved — all mechanically checkable."
       },
       "chips": ["docker diff", "primary key", "schema-aware"]
     },
@@ -100,8 +100,8 @@
           "en": "One binary, one external dependency"
         },
         "body": {
-          "zh": "worldcheck 通过 stdio 调用 docker CLI，不用 SDK、不与 daemon 版本耦合；没有常驻进程，没有自己的数据库。行级对比按主键对齐，主键从数据库目录里读，不是猜的。",
-          "en": "worldcheck drives the docker CLI over stdio — no SDK, no daemon-version coupling; no server process, no database of its own. Rows are aligned by primary key, read from the database catalog rather than guessed."
+          "zh": "worldcheck 通过 stdio 调用 docker CLI，不用 SDK、不与 daemon 版本耦合；没有常驻进程，没有自己的数据库。行级对比按主键对齐，主键从数据库目录里读，不是猜的；只推进了序列、没留下行的改动也会单独列出。",
+          "en": "worldcheck drives the docker CLI over stdio — no SDK, no daemon-version coupling; no server process, no database of its own. Rows are aligned by primary key, read from the database catalog rather than guessed, and a change that only advanced a sequence without leaving a row behind is listed separately."
         },
         "image": {
           "light": "/assets/architecture-light.svg",
@@ -240,8 +240,8 @@
       "en": "m3 (`run` plus the worldcheck.html reconciliation report) is a roadmap stub in this release."
     },
     {
-      "zh": "diff 的文件部分是 `docker diff` 的原始视图，包含容器自身的运行期写入（Postgres 会改 /tmp 与数据目录）；行级增删改才是精确信号。",
-      "en": "The filesystem half of a diff is the raw `docker diff` view, including the container's own runtime writes (a live Postgres rewrites /tmp and its data directory); the row deltas are the precise signal."
+      "zh": "diff 的文件部分是 `docker diff` 的原始视图，包含容器自身的运行期写入（Postgres 会改 /tmp 与数据目录）；行级增删改才是精确信号。检查点记过、对比时不再出现在 `docker diff` 里的路径，按它现在的状态归类：回到镜像内容算 changed，恢复的删除算 added，只有确实不在了才算 deleted。",
+      "en": "The filesystem half of a diff is the raw `docker diff` view, including the container's own runtime writes (a live Postgres rewrites /tmp and its data directory); the row deltas are the precise signal. A path the checkpoint recorded that the current capture no longer lists is reported by the state it holds now: back to the image's content counts as changed, a restored deletion as added, and only a path that is really gone as deleted."
     },
     {
       "zh": "worldcheck 只审计不回滚；diff 纯机械，无 LLM 判断；仅支持本地 Docker 与 Postgres。",
