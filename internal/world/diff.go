@@ -33,12 +33,18 @@ type RowDeltas struct {
 }
 
 // MutationDiff is the machine-checkable comparison of world state against a
-// named checkpoint: filesystem A/C/D, row deltas, and whether the schema moved.
-// Purely mechanical — docker diff and pg_dump, no heuristic judgment.
+// named checkpoint: filesystem A/C/D, row deltas, sequence values that moved,
+// and whether the schema moved. Purely mechanical — docker diff and pg_dump, no
+// heuristic judgment.
 type MutationDiff struct {
-	Label         string
-	FS            FSChanges
-	DBRows        RowDeltas
+	Label  string
+	FS     FSChanges
+	DBRows RowDeltas
+	// Sequences names every sequence whose recorded value moved since the
+	// checkpoint (`tasks_id_seq 6 -> 7`). A rolled-back insert leaves no row
+	// behind but does leave the sequence advanced, and the state fingerprint
+	// counts it, so the diff must not call that world unchanged.
+	Sequences     []string
 	SchemaChanged bool
 	// Reconcile is the human-readable mutation summary. The verify-claim half of
 	// the reconciliation arrives with m3's `run`.
@@ -78,6 +84,7 @@ func DiffAgainst(ctx context.Context, r Runner, worldDir, label string) (*Mutati
 		Label:         label,
 		FS:            diffFileChanges(cp.FSBaseline, current),
 		DBRows:        DiffRows(ParseDumpRows(beforeDump), ParseDumpRows(afterDump), keys),
+		Sequences:     DiffSequences(beforeDump, afterDump),
 		SchemaChanged: SchemaDigest(beforeDump) != SchemaDigest(afterDump),
 	}
 	diff.Reconcile = summarizeDiff(diff)
@@ -87,9 +94,17 @@ func DiffAgainst(ctx context.Context, r Runner, worldDir, label string) (*Mutati
 // diffFileChanges reports the mutations that appeared, changed or disappeared
 // since the checkpoint. A path's identity is (container, path) and its status
 // is the docker-diff kind, so a path whose status differs from the baseline is
-// reported by its current kind; a path that was mutated at checkpoint time and
-// is no longer mutated at all is reported as deleted, because the mutation was
-// undone.
+// reported by its current kind. A path the baseline holds and the current
+// capture does not is reported by the state it holds now — which is the image's
+// own content, the only thing "no longer differs from the image" can mean for a
+// container started from that image:
+//
+//	baseline A (not in the image) -> the path is gone:                 Deleted
+//	baseline C (differs from it)  -> the path matches the image again:  Changed
+//	baseline D (removed from it)  -> the path is back:                 Added
+//
+// Reporting every undone mutation as deleted would claim a file that exists is
+// gone, and dropping the D case would miss a file that came back.
 func diffFileChanges(baseline, current []FileChange) FSChanges {
 	base := kindsOf(baseline)
 	curr := kindsOf(current)
@@ -111,8 +126,13 @@ func diffFileChanges(baseline, current []FileChange) FSChanges {
 		if _, still := curr[changeKey(c)]; still {
 			continue
 		}
-		if c.Kind == "A" || c.Kind == "C" {
+		switch c.Kind {
+		case "A":
 			out.Deleted = append(out.Deleted, c)
+		case "C":
+			out.Changed = append(out.Changed, c)
+		case "D":
+			out.Added = append(out.Added, c)
 		}
 	}
 	sortFileChanges(out.Added)
@@ -154,17 +174,21 @@ func primaryKeys(run func(io.Reader, ...string) (string, error), base []string, 
 func summarizeDiff(d *MutationDiff) string {
 	files := len(d.FS.Added) + len(d.FS.Changed) + len(d.FS.Deleted)
 	rows := len(d.DBRows.Inserted) + len(d.DBRows.Updated) + len(d.DBRows.Deleted)
-	if files == 0 && rows == 0 && !d.SchemaChanged {
+	if files == 0 && rows == 0 && len(d.Sequences) == 0 && !d.SchemaChanged {
 		return "no mutations since the checkpoint"
 	}
 	schema := "unchanged"
 	if d.SchemaChanged {
 		schema = "changed"
 	}
-	return fmt.Sprintf(
+	summary := fmt.Sprintf(
 		"files %d added / %d changed / %d deleted; rows %d inserted / %d updated / %d deleted; schema %s",
 		len(d.FS.Added), len(d.FS.Changed), len(d.FS.Deleted),
 		len(d.DBRows.Inserted), len(d.DBRows.Updated), len(d.DBRows.Deleted), schema)
+	if len(d.Sequences) > 0 {
+		summary += fmt.Sprintf("; sequences %d changed", len(d.Sequences))
+	}
+	return summary
 }
 
 func kindsOf(changes []FileChange) map[string]string {

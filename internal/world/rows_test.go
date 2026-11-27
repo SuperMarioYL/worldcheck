@@ -166,3 +166,22 @@ func TestDiffRowsReportsATableThatAppeared(t *testing.T) {
 		t.Errorf("inserted = %v", deltas.Inserted)
 	}
 }
+
+// TestDiffSequencesReportsOnlyTheSequencesThatMoved: a rolled-back insert leaves
+// no row behind, so the sequence value is the only trace it leaves — and it must
+// be reported, because the state fingerprint counts it.
+func TestDiffSequencesReportsOnlyTheSequencesThatMoved(t *testing.T) {
+	after := strings.Replace(dumpBefore,
+		"SELECT pg_catalog.setval('public.tasks_id_seq', 3, true);",
+		"SELECT pg_catalog.setval('public.tasks_id_seq', 9, true);", 1)
+	if after == dumpBefore {
+		t.Fatal("fixture no longer carries the tasks_id_seq setval line")
+	}
+	moved := DiffSequences(dumpBefore, after)
+	if len(moved) != 1 || moved[0] != "tasks_id_seq 3 -> 9" {
+		t.Errorf("sequences = %v, want exactly tasks_id_seq 3 -> 9", moved)
+	}
+	if moved := DiffSequences(dumpBefore, dumpBefore); len(moved) != 0 {
+		t.Errorf("an unchanged capture must report no sequence movement, got %v", moved)
+	}
+}

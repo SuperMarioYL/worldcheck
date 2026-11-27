@@ -4,6 +4,37 @@ All notable changes to worldcheck are recorded here. The version in `VERSION`
 is the release source of truth; a test keeps it in step with the version the
 binary reports and the recorded demo run.
 
+## v0.3.0
+
+Three evidence defects, each reproduced by running v0.2.0 against a real
+postgres:16-alpine world before it was fixed.
+
+### Fixed
+
+- `diff` refuses a checkpoint whose snapshot is not the one the checkpoint
+  recorded. `checkpoint` stores the dump's sha256 in `<label>.json` and printed
+  it as the checkpoint's database snapshot, but loading a checkpoint never
+  compared the two, so a truncated or foreign `<label>.dump` silently became the
+  baseline the report was measured against (an emptied dump reported every
+  seeded row as inserted, at exit 0). The digest is now verified on load and a
+  mismatch is an error naming the label, the recorded digest and the one on
+  disk.
+- `diff` reports sequences that moved instead of claiming nothing changed. Row
+  deltas come from the `COPY` blocks and the schema digest deliberately excludes
+  sequence values, so a mutation that advances a sequence without leaving a row
+  — the classic `INSERT` then `ROLLBACK` — produced "no mutations since the
+  checkpoint", while the seeded-state fingerprint (which counts those `setval`
+  lines) had already moved for the same world. The report now lists the
+  sequences that advanced (`tasks_id_seq 6 -> 7`) and the summary counts them;
+  schema detection is unchanged, since a sequence value is data, not schema.
+- A checkpoint-time filesystem mutation that was undone is reported by the state
+  the path holds now. A path the checkpoint's baseline holds and the current
+  `docker diff` does not now holds the image's own content — it is not gone. A
+  reverted (or container-recreate-reset) `C` path was reported as `DELETED`
+  although it exists, and a `D` path that came back was dropped from the report
+  entirely. Both now read as what happened: `C` -> changed, `D` -> added, `A` ->
+  deleted (unchanged).
+
 ## v0.2.0
 
 Checkpoint and diff ship (the plan's m2), on top of three fixes reproduced by

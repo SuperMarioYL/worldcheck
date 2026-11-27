@@ -135,6 +135,83 @@ func TestDiffAgainstSeesASchemaOnlyMutation(t *testing.T) {
 	}
 }
 
+// TestDiffAgainstReportsASequenceOnlyMutation: an agent that inserts a row and
+// rolls it back leaves no row behind, but the sequence stayed advanced and the
+// state fingerprint counts it — so the diff must not call that world unchanged.
+func TestDiffAgainstReportsASequenceOnlyMutation(t *testing.T) {
+	worldDir := checkpointedWorld(t, "t1")
+	seqOnly := strings.Replace(dumpBefore,
+		"SELECT pg_catalog.setval('public.tasks_id_seq', 3, true);",
+		"SELECT pg_catalog.setval('public.tasks_id_seq', 7, true);", 1)
+	if seqOnly == dumpBefore {
+		t.Fatal("fixture no longer carries the tasks_id_seq setval line")
+	}
+	fake := &fakeRunner{
+		containers:     dbContainer,
+		diffs:          map[string]string{"cid1": ""},
+		dumps:          []string{seqOnly},
+		primaryKeyRows: "tasks|id\n",
+	}
+
+	diff, err := DiffAgainst(context.Background(), fake, worldDir, "t1")
+	if err != nil {
+		t.Fatalf("DiffAgainst: %v", err)
+	}
+	if len(diff.Sequences) != 1 || diff.Sequences[0] != "tasks_id_seq 3 -> 7" {
+		t.Errorf("sequences = %v, want exactly tasks_id_seq 3 -> 7", diff.Sequences)
+	}
+	if len(diff.DBRows.Inserted)+len(diff.DBRows.Updated)+len(diff.DBRows.Deleted) != 0 {
+		t.Errorf("no row moved, got %+v", diff.DBRows)
+	}
+	if diff.SchemaChanged {
+		t.Error("a sequence value is data, not a schema change")
+	}
+	if diff.Reconcile == "no mutations since the checkpoint" || !strings.Contains(diff.Reconcile, "sequences 1 changed") {
+		t.Errorf("reconcile = %q, want the sequence movement reported", diff.Reconcile)
+	}
+}
+
+// TestDiffAgainstReportsRestoredBaselinePathsByCurrentState: a path the baseline
+// holds and the current capture does not now holds the image's content, so a
+// reverted file is changed (not deleted) and a restored deletion is added.
+func TestDiffAgainstReportsRestoredBaselinePathsByCurrentState(t *testing.T) {
+	worldDir := newTestWorld(t)
+	cp := &Checkpoint{
+		Label: "t1",
+		FSBaseline: []FileChange{
+			{Container: dbContainerName, Kind: "A", Path: "/tmp/baseline-file"},
+			{Container: dbContainerName, Kind: "C", Path: "/etc/passwd"},
+			{Container: dbContainerName, Kind: "D", Path: "/usr/local/bin/docker-entrypoint.sh"},
+		},
+		DBDumpSHA256: ComputeFingerprint(dumpBefore),
+	}
+	if err := saveCheckpoint(worldDir, cp, dumpBefore); err != nil {
+		t.Fatal(err)
+	}
+	// The container was recreated instead of the edits being reverted: its diff
+	// reports none of the three paths, so all three are back to the image's state.
+	fake := &fakeRunner{
+		containers:     dbContainer,
+		diffs:          map[string]string{"cid1": ""},
+		dumps:          []string{dumpBefore},
+		primaryKeyRows: "tasks|id\n",
+	}
+
+	diff, err := DiffAgainst(context.Background(), fake, worldDir, "t1")
+	if err != nil {
+		t.Fatalf("DiffAgainst: %v", err)
+	}
+	if len(diff.FS.Deleted) != 1 || diff.FS.Deleted[0].Path != "/tmp/baseline-file" {
+		t.Errorf("only the path that is gone may be deleted, got %+v", diff.FS.Deleted)
+	}
+	if len(diff.FS.Changed) != 1 || diff.FS.Changed[0].Path != "/etc/passwd" {
+		t.Errorf("a reverted file exists and must be reported as changed, got %+v", diff.FS.Changed)
+	}
+	if len(diff.FS.Added) != 1 || diff.FS.Added[0].Path != "/usr/local/bin/docker-entrypoint.sh" {
+		t.Errorf("a restored deletion must be reported as added, got %+v", diff.FS.Added)
+	}
+}
+
 func TestDiffAgainstWithoutCheckpoint(t *testing.T) {
 	worldDir := newTestWorld(t)
 	_, err := DiffAgainst(context.Background(), &fakeRunner{}, worldDir, "t1")

@@ -18,6 +18,10 @@ import (
 // every data block in a pg_dump capture.
 var copyHeader = regexp.MustCompile(`^COPY (.+?) \((.*)\) FROM stdin;$`)
 
+// setvalLine matches the `SELECT pg_catalog.setval('<sequence>', <value>, <called>);`
+// line pg_dump writes for every sequence whose value it records.
+var setvalLine = regexp.MustCompile(`^SELECT pg_catalog\.setval\('(.+)', (-?\d+), (?:true|false)\);$`)
+
 // TableRows is one table's rows as pg_dump emitted them: the COPY header's
 // column list plus every data line in dump order.
 type TableRows struct {
@@ -56,13 +60,45 @@ func ParseDumpRows(dump string) ParsedDump {
 	return parsed
 }
 
+// SequenceValues reduces a pg_dump capture to the recorded last value of every
+// sequence, keyed the way the tables are (schema qualifier dropped). Sequence
+// values are data, not schema — SchemaDigest excludes them for that reason — and
+// they are the only trace a rolled-back insert leaves behind: the rows are gone,
+// the sequence stayed advanced.
+func SequenceValues(dump string) map[string]string {
+	values := map[string]string{}
+	for _, line := range strings.Split(dump, "\n") {
+		m := setvalLine.FindStringSubmatch(strings.TrimSpace(line))
+		if m == nil {
+			continue
+		}
+		values[shortTableName(m[1])] = m[2]
+	}
+	return values
+}
+
+// DiffSequences reports the sequences whose value moved between two captures,
+// ordered by name, as `tasks_id_seq 6 -> 7`. A sequence that only exists on one
+// side is reported with the missing value empty.
+func DiffSequences(before, after string) []string {
+	b, a := SequenceValues(before), SequenceValues(after)
+	var moved []string
+	for _, name := range unionKeys(b, a) {
+		if b[name] != a[name] {
+			moved = append(moved, fmt.Sprintf("%s %s -> %s", name, b[name], a[name]))
+		}
+	}
+	return moved
+}
+
 // SchemaDigest hashes everything in a pg_dump capture that is not row content:
 // DDL, indexes, constraints, sequence definitions and the SET boilerplate.
 // Sequence *values* (the `setval` calls) are data, not schema, so they are
-// excluded — otherwise a sequence-only data change would be mislabelled as a
-// schema change. Comment lines, blank lines and the per-dump `\restrict` tokens
-// are dropped and the remainder sorted, reusing ComputeFingerprint's
-// normalisation so both digests ignore dump ordering.
+// excluded here and reported as their own delta by DiffSequences — otherwise a
+// sequence-only data change would be mislabelled as a schema change. Comment
+// lines, blank lines and the per-dump `\restrict` tokens are dropped and the
+// remainder sorted, reusing ComputeFingerprint's normalisation so both digests
+// ignore dump ordering.
 func SchemaDigest(dump string) string {
 	kept := make([]string, 0, 64)
 	inRows := false
@@ -231,6 +267,23 @@ func unionTables(a, b ParsedDump) []string {
 	}
 	sort.Strings(tables)
 	return tables
+}
+
+// unionKeys returns the keys of both maps, ordered.
+func unionKeys(a, b map[string]string) []string {
+	seen := map[string]bool{}
+	for k := range a {
+		seen[k] = true
+	}
+	for k := range b {
+		seen[k] = true
+	}
+	keys := make([]string, 0, len(seen))
+	for k := range seen {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 func sortedKeys(m map[string][]string) []string {

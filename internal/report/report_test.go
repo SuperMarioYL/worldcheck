@@ -98,4 +98,25 @@ func TestRenderDiffCleanWorldSaysSo(t *testing.T) {
 	if !strings.Contains(buf.String(), "no mutations since the checkpoint") {
 		t.Errorf("a clean diff must say so:\n%s", buf.String())
 	}
+	if strings.Contains(buf.String(), "SEQUENCE") {
+		t.Errorf("a world with no sequence movement must not render a sequence table:\n%s", buf.String())
+	}
+}
+
+func TestRenderDiffPrintsSequenceDeltas(t *testing.T) {
+	var buf bytes.Buffer
+	diff := &world.MutationDiff{
+		Label:     "t1",
+		Sequences: []string{"tasks_id_seq 6 -> 7"},
+		Reconcile: "files 0 added / 0 changed / 0 deleted; rows 0 inserted / 0 updated / 0 deleted; schema unchanged; sequences 1 changed",
+	}
+	if err := RenderDiff(&buf, diff); err != nil {
+		t.Fatalf("RenderDiff: %v", err)
+	}
+	out := buf.String()
+	for _, want := range []string{"SEQUENCE", "CHANGED", "tasks_id_seq 6 -> 7", "sequences 1 changed"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("diff output missing %q:\n%s", want, out)
+		}
+	}
 }

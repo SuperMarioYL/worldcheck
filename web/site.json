@@ -169,7 +169,7 @@
         "image": "/assets/architecture-light.svg",
         "imageDark": "/assets/architecture-dark.svg",
         "command": "worldcheck status --world worlds/postgres-starter",
-        "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-10-22 19:28:43 UTC (worldcheck 0.2.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-schema-and-data-sorted-lines)\n  bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
+        "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-11-27 18:47:33 UTC (worldcheck 0.3.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-schema-and-data-sorted-lines)\n  bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
       },
       {
         "label": { "zh": "agent 凑绿", "en": "Agent bends it" },

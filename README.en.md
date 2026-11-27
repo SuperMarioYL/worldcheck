@@ -46,7 +46,7 @@ One binary, one external dependency (the Docker CLI, invoked over stdio — no S
 
 - **provisioner** — `up` reads `compose.yml` and `seed.sql` from the world directory: `docker compose down -v` resets the world, `up -d` starts it, a bounded query against the target database waits until it really answers (not merely until the socket accepts — the postgres image's initdb runs a temporary server that does too), `psql` applies the seed, and `pg_dump` captures the full state;
 - **checkpoint** — `checkpoint <label>` records each container's `docker diff` filesystem baseline and stores the database snapshot under `checkpoints/` in the world directory;
-- **differ** — `diff <label>` re-captures both and compares them: filesystem A/C/D, row-level insertions/updates/deletions aligned by primary key, and whether the schema changed;
+- **differ** — `diff <label>` re-captures both and compares them: filesystem A/C/D, row-level insertions/updates/deletions aligned by primary key, sequences that advanced (a rolled-back insert still leaves a trace), and whether the schema changed;
 - **manifest / report (terminal part)** — the seed sha256, services and images, per-table row counts and the overall state fingerprint go into `manifest.json`; `status` and `diff` render them as tables.
 
 No server process, no database of its own, no Kubernetes. State lives in Docker (compose volumes) and in the world directory: `manifest.json`, `checkpoints/`, and — with m3 — `worldcheck.html`.
@@ -110,7 +110,7 @@ KIND     ROW
 UPDATED  tasks[id=6] = 6 | 3 | keep diffs mechanical | f  ->  6 | 3 | keep diffs mechanical | t
 ```
 
-That diff is catching an agent that quietly flipped one of its own fixture rows to green and left a file behind. Rows are aligned by primary key, read from the database catalog rather than guessed; whether the schema moved is reported separately.
+That diff is catching an agent that quietly flipped one of its own fixture rows to green and left a file behind. Rows are aligned by primary key, read from the database catalog rather than guessed; whether the schema moved is reported separately; and a change that only advanced a sequence, leaving no row behind (insert a row, roll it back), is listed too.
 
 **4. Inspect the state and its fingerprint:**
 
@@ -120,7 +120,7 @@ world      postgres-starter
 project    wc-postgres-starter
 seed       seed.sql (sha256:2a2fb32475ae)
 database   app
-provisioned 2026-10-22 19:28:43 UTC (worldcheck 0.2.0)
+provisioned 2026-11-27 18:47:33 UTC (worldcheck 0.3.0)
 
 SERVICE  IMAGE
 db       postgres:16-alpine
@@ -178,7 +178,7 @@ The machine this repository was built on could not encode with vhs, so the commi
 | `worldcheck status --world <dir>` | implemented | prints services, table row counts and the state fingerprint from the manifest |
 | state fingerprint | implemented | sha256 over a denoised, sorted full `pg_dump` (schema + data); the same seed must reproduce the same fingerprint, and any data or schema change must move it |
 | `worldcheck checkpoint <label> --world <dir>` | implemented | pre-verification snapshot: each container's `docker diff` baseline plus a database snapshot, stored under `checkpoints/` |
-| `worldcheck diff <label> --world <dir>` | implemented | filesystem A/C/D, row-level insertions/updates/deletions aligned by primary key, and whether the schema moved since a named checkpoint |
+| `worldcheck diff <label> --world <dir>` | implemented | filesystem A/C/D, row-level insertions/updates/deletions aligned by primary key, advanced sequences, and whether the schema moved since a named checkpoint |
 | `worldcheck run -- <verify-cmd>` | roadmap (m3) | chains checkpoint → run → diff → reconciliation report |
 
 Explicit non-goals: no web UI (the report is a static HTML file); no MCP or "universal agent protocol"; checkpoint/diff support Postgres only, local Docker only; no rollback — worldcheck audits, it does not rewind; diffs are purely mechanical (`docker diff` + `pg_dump`), no LLM judgment.
@@ -202,7 +202,7 @@ A checkpoint label becomes a filename under `checkpoints/`, so it accepts letter
 ## Roadmap
 
 - **m1 — seed the world** (done): `up` + `status` + the seed manifest + the state fingerprint.
-- **m2 — checkpoint and diff** (done, this release): `checkpoint <label>` freezes the world before verification; `diff <label>` emits machine-checkable filesystem A/C/D, row deltas aligned by primary key, and the schema verdict.
+- **m2 — checkpoint and diff** (done): `checkpoint <label>` freezes the world before verification; `diff <label>` emits machine-checkable filesystem A/C/D, row deltas aligned by primary key, advanced sequences, and the schema verdict.
 - **m3 — run and reconcile**: `run --label <label> -- <verify-cmd>` chains checkpoint → verification → diff and renders the terminal + `worldcheck.html` reconciliation report, exiting non-zero when the command fails; records the full demo.
 
 ## License

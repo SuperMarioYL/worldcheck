@@ -57,6 +57,12 @@ func RenderDiff(w io.Writer, d *world.MutationDiff) error {
 	renderRows(tw, "INSERTED", d.DBRows.Inserted)
 	renderRows(tw, "UPDATED", d.DBRows.Updated)
 	renderRows(tw, "DELETED", d.DBRows.Deleted)
+	// Sequences are listed only when one moved: a world's diff usually has none,
+	// and a table that is always empty reads as if nothing were tracked.
+	if len(d.Sequences) > 0 {
+		fmt.Fprintln(tw, "\nKIND\tSEQUENCE")
+		renderRows(tw, "CHANGED", d.Sequences)
+	}
 	return tw.Flush()
 }
 

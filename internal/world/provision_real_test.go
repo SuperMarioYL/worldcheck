@@ -198,6 +198,9 @@ func TestCheckpointAndDiffRealWorld(t *testing.T) {
 		}
 	}
 	psql("UPDATE tasks SET done = true WHERE id = 3;")
+	// A rolled-back insert leaves no row behind but advances the sequence: the
+	// diff has to report that too, or a world the agent touched reads as clean.
+	psql("BEGIN; INSERT INTO tasks (project_id, title) VALUES (1, 'agent scratch row'); ROLLBACK;")
 	if _, err := runner.Run(ctx, worldDir, nil,
 		"docker", "compose", "-p", project, "exec", "-T", dbServiceName,
 		"sh", "-c", "echo bent > /tmp/agent-note"); err != nil {
@@ -213,6 +216,9 @@ func TestCheckpointAndDiffRealWorld(t *testing.T) {
 	}
 	if len(diff.DBRows.Inserted) != 0 || len(diff.DBRows.Deleted) != 0 {
 		t.Errorf("no rows were added or removed, got inserted=%v deleted=%v", diff.DBRows.Inserted, diff.DBRows.Deleted)
+	}
+	if len(diff.Sequences) != 1 || !strings.Contains(diff.Sequences[0], "tasks_id_seq") {
+		t.Errorf("the rolled-back insert must be reported as a sequence movement, got %v", diff.Sequences)
 	}
 	if diff.SchemaChanged {
 		t.Error("the schema was not touched")

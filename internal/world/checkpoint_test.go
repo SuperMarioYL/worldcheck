@@ -90,3 +90,31 @@ func TestLoadCheckpointMissing(t *testing.T) {
 		t.Fatalf("want a missing-checkpoint error, got %v", err)
 	}
 }
+
+// TestLoadCheckpointRejectsASnapshotThatDoesNotMatchItsRecord: the record names
+// the state a diff is measured against, so a snapshot whose bytes are not the
+// recorded one — an interrupted write, a file copied from another checkpoint —
+// must be refused instead of quietly becoming the baseline.
+func TestLoadCheckpointRejectsASnapshotThatDoesNotMatchItsRecord(t *testing.T) {
+	worldDir := newTestWorld(t)
+	cp := &Checkpoint{Label: "t1", DBDumpSHA256: ComputeFingerprint(dumpBefore)}
+	if err := saveCheckpoint(worldDir, cp, dumpBefore); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loadCheckpoint(worldDir, "t1"); err != nil {
+		t.Fatalf("a snapshot matching its record must load: %v", err)
+	}
+
+	for name, snapshot := range map[string]string{
+		"truncated": "",
+		"foreign":   dumpAfter,
+	} {
+		if err := os.WriteFile(checkpointDumpPath(worldDir, "t1"), []byte(snapshot), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		_, _, err := loadCheckpoint(worldDir, "t1")
+		if err == nil || !strings.Contains(err.Error(), "does not match") {
+			t.Fatalf("a %s snapshot must be refused, got %v", name, err)
+		}
+	}
+}

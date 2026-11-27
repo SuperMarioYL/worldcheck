@@ -152,6 +152,10 @@ func saveCheckpoint(worldDir string, cp *Checkpoint, dump string) error {
 }
 
 // loadCheckpoint reads a checkpoint record and the dump it was taken against.
+// The dump must hash to the digest the record carries: the record names the
+// state a diff is measured against, so a truncated, stale or foreign snapshot
+// (an interrupted write, a file copied from another checkpoint) is a different
+// baseline and must be refused rather than silently used.
 func loadCheckpoint(worldDir, label string) (*Checkpoint, string, error) {
 	if !checkpointLabelRe.MatchString(label) {
 		return nil, "", fmt.Errorf("invalid checkpoint label %q: use letters, digits, dot, dash or underscore", label)
@@ -171,6 +175,10 @@ func loadCheckpoint(worldDir, label string) (*Checkpoint, string, error) {
 	dump, err := os.ReadFile(checkpointDumpPath(worldDir, label))
 	if err != nil {
 		return nil, "", fmt.Errorf("reading the %s snapshot: %w", label, err)
+	}
+	if got := ComputeFingerprint(string(dump)); got != cp.DBDumpSHA256 {
+		return nil, "", fmt.Errorf("the %s snapshot does not match its record: recorded sha256:%s, on disk sha256:%s; "+
+			"re-take the checkpoint with `worldcheck checkpoint %s --world <dir>`", label, cp.DBDumpSHA256, got, label)
 	}
 	return &cp, string(dump), nil
 }

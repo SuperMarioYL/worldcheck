@@ -1,10 +1,10 @@
 {
   "product": "worldcheck",
-  "implementation_version": "0.2.0",
-  "milestone_scope": "m1 (seed world) and m2 (checkpoint/diff): `up` provisions the bundled postgres-starter world and records its manifest; `status` prints services plus the seeded-state fingerprint; `checkpoint <label>` snapshots the world; `diff <label>` reports the filesystem and row mutations since it. `run` (m3) is a roadmap stub.",
-  "recorded_at": "2026-10-22T19:28:43Z",
+  "implementation_version": "0.3.0",
+  "milestone_scope": "m1 (seed world) and m2 (checkpoint/diff): `up` provisions the bundled postgres-starter world and records its manifest; `status` prints services plus the seeded-state fingerprint; `checkpoint <label>` snapshots the world and refuses a snapshot that does not match its recorded digest; `diff <label>` reports the filesystem, row and sequence mutations since it. `run` (m3) is a roadmap stub.",
+  "recorded_at": "2026-11-27T18:47:33Z",
   "environment": {
-    "os": "macOS (darwin 25.6.0, arm64)",
+    "os": "macOS (darwin 27.2.0, arm64)",
     "go": "1.24.1",
     "docker_server": "27.4.0",
     "world_image": "postgres:16-alpine"
@@ -28,7 +28,7 @@
     {
       "command": "worldcheck status --world worlds/postgres-starter",
       "purpose": "print services plus the seeded-state fingerprint from the manifest",
-      "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-10-22 19:28:43 UTC (worldcheck 0.2.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-schema-and-data-sorted-lines)\n  bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
+      "output": "world      postgres-starter\nproject    wc-postgres-starter\nseed       seed.sql (sha256:2a2fb32475ae)\ndatabase   app\nprovisioned 2026-11-27 18:47:33 UTC (worldcheck 0.3.0)\n\nSERVICE  IMAGE\ndb       postgres:16-alpine\n\nTABLE     ROWS\nprojects  3\ntasks     6\nusers     4\n\nfingerprint (sha256:pgdump-schema-and-data-sorted-lines)\n  bbc332815fe79e0680b313ee0ce12ead8bb24cc39cf3e0d94533de00cf8e1b3d"
     },
     {
       "command": "docker compose -p wc-postgres-starter exec -T db psql -U postgres -d app -q -c 'UPDATE tasks SET done = true WHERE id = 6;'",
@@ -66,12 +66,13 @@
   },
   "verification": [
     "go test ./... — unit tests (fake runner, no daemon) plus the real-world integration tests TestProvisionRealPostgresStarterWorld, TestProvisionRealWorldWithoutHealthcheck and TestCheckpointAndDiffRealWorld, which run against a real Docker daemon; unit tests stay green with -short.",
-    "The integration tests provision the same seed twice and require identical fingerprints, then edit seed.sql and require the fingerprint to change; provision a world whose compose file has no healthcheck; and require the checkpoint/diff pair to report exactly one updated row after the agent bends one.",
-    "A schema-only seed edit (appending CREATE INDEX) was also run by hand and moves the fingerprint, which the v0.1 --data-only capture could not do."
+    "The integration tests provision the same seed twice and require identical fingerprints, then edit seed.sql and require the fingerprint to change; provision a world whose compose file has no healthcheck; and require the checkpoint/diff pair to report exactly one updated row plus the sequence the agent's rolled-back insert advanced, after the agent bends one row.",
+    "A schema-only seed edit (appending CREATE INDEX) was also run by hand and moves the fingerprint, which the v0.1 --data-only capture could not do.",
+    "A checkpoint whose stored snapshot no longer matches its recorded digest was reproduced by truncating <world>/checkpoints/<label>.dump: v0.3.0 refuses it with a mismatch error instead of diffing against a foreign baseline."
   ],
   "limitations": [
     "m3 (`run` with the pass-plus-mutations reconciliation report and worldcheck.html) is a stub: the command exists and prints the roadmap note instead of executing.",
-    "The filesystem half of a diff reports what `docker diff` sees, which includes the container's own runtime paths (a live Postgres rewrites /tmp and its data directory). The row deltas are the precise signal; the filesystem list is the raw container view.",
+    "The filesystem half of a diff reports what `docker diff` sees, which includes the container's own runtime paths (a live Postgres rewrites /tmp and its data directory). The row deltas are the precise signal; the filesystem list is the raw container view. A path the current capture no longer lists is reported by the state it holds now (changed when it matches the image again, added when a deleted path is back).",
     "The committed GIF is a frame sequence rendered from this real recorded run (this machine's vhs cannot complete an encode); docs/demo.tape plus docs/demo-record.sh produce a true terminal recording where vhs works.",
     "Windows is out of scope; macOS and Linux are supported."
   ]

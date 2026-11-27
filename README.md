@@ -46,7 +46,7 @@ worldcheck 从源头接手这件事：世界由工具播种，状态由工具度
 
 - **provisioner** —— `up` 读取世界目录里的 `compose.yml` 与 `seed.sql`：`docker compose down -v` 清空旧世界，`up -d` 起服务，自己对目标库跑一条真实查询、等它真的能应答（不是等 socket 能连——postgres 镜像的 initdb 临时服务也会接连接），`psql` 灌入种子，`pg_dump` 抓取完整状态；
 - **checkpoint** —— `checkpoint <label>` 记录每个容器的 `docker diff` 文件基线，并把数据库快照存进世界目录的 `checkpoints/`；
-- **differ** —— `diff <label>` 重新采集两者并对比：文件系统的 A/C/D、按主键对齐的行级增删改、schema 是否变化；
+- **differ** —— `diff <label>` 重新采集两者并对比：文件系统的 A/C/D、按主键对齐的行级增删改、序列推进（被回滚的插入也会留下痕迹）、schema 是否变化；
 - **manifest / report（终端部分）** —— 种子 sha256、服务与镜像、每张表的行数、整体状态指纹写进 `manifest.json`；`status` 与 `diff` 把它渲染成表格。
 
 没有常驻进程，没有自己的数据库，没有 Kubernetes。状态只存在于 Docker（compose 卷）和世界目录里：`manifest.json`、`checkpoints/`，以及未来 m3 的 `worldcheck.html`。
@@ -110,7 +110,7 @@ KIND     ROW
 UPDATED  tasks[id=6] = 6 | 3 | keep diffs mechanical | f  ->  6 | 3 | keep diffs mechanical | t
 ```
 
-上面这一次 diff 抓住的，正是一个偷偷把自己那条 fixture 改绿、又在世界里留下文件的 agent。行级对比按主键对齐（主键从数据库目录里读，不是猜的）；schema 有没有被动过单独给一个布尔结论。
+上面这一次 diff 抓住的，正是一个偷偷把自己那条 fixture 改绿、又在世界里留下文件的 agent。行级对比按主键对齐（主键从数据库目录里读，不是猜的）；schema 有没有被动过单独给一个布尔结论；只推进了序列、没留下行的改动（比如插一行又回滚）同样会被列出来。
 
 **4. 查看状态与指纹：**
 
@@ -120,7 +120,7 @@ world      postgres-starter
 project    wc-postgres-starter
 seed       seed.sql (sha256:2a2fb32475ae)
 database   app
-provisioned 2026-10-22 19:28:43 UTC (worldcheck 0.2.0)
+provisioned 2026-11-27 18:47:33 UTC (worldcheck 0.3.0)
 
 SERVICE  IMAGE
 db       postgres:16-alpine
@@ -178,7 +178,7 @@ seeded-state fingerprint: 63d0e70e2f5465aa5f376217b788827bcad18fbf802bd198493ca8
 | `worldcheck status --world <dir>` | 已实现 | 从清单打印服务、表行数与状态指纹 |
 | 状态指纹 | 已实现 | 完整 `pg_dump`（schema + 数据）去噪排序后取 sha256；同种子必同指纹，改数据或改 schema 必改指纹 |
 | `worldcheck checkpoint <label> --world <dir>` | 已实现 | 验证前定格：每个容器的 `docker diff` 文件基线 + 数据库快照，存进 `checkpoints/` |
-| `worldcheck diff <label> --world <dir>` | 已实现 | 对比检查点之后的文件 A/C/D、按主键对齐的行级增删改，以及 schema 是否变化 |
+| `worldcheck diff <label> --world <dir>` | 已实现 | 对比检查点之后的文件 A/C/D、按主键对齐的行级增删改、序列推进，以及 schema 是否变化 |
 | `worldcheck run -- <verify-cmd>` | 路线图（m3） | 串起 checkpoint → 执行 → 对比 → 对账报告 |
 
 明确的非目标：不做 Web 界面（报告是静态 HTML）；不做 MCP 或「通用 agent 协议」；checkpoint/diff 只支持 Postgres，本地 Docker only；不做回滚——worldcheck 只审计，不倒带；diff 纯机械（`docker diff` + `pg_dump`），不引入 LLM 判断。
@@ -197,12 +197,12 @@ worlds/postgres-starter/
 
 复制这个目录就是你的新世界。provisioner 遵守两条约定：compose 里必须有一个名为 `db` 的 Postgres 服务；`POSTGRES_USER` / `POSTGRES_DB` 环境变量告诉它种子和指纹走哪条通道——这两个变量既可以写成映射（`POSTGRES_USER: postgres`），也可以写成 `docker compose config` 会归一化成的列表形式（`- POSTGRES_USER=postgres`）。默认不发布宿主机端口——两个世界不会抢 5432，agent 的验证命令通过 compose 项目访问数据库（`docker compose -p wc-postgres-starter exec db psql ...`）；需要宿主机套接字时，在你的世界副本里加 `ports:` 映射即可。
 
-检查点标签会变成 `checkpoints/` 下的文件名，所以只接受字母、数字、点、横线和下划线。
+检查点标签会变成 `checkpoints/` 下的文件名，所以只接受字母、数字、点、横线和下划线。`checkpoints/<label>.json` 记着它那份 `.dump` 的 sha256：`diff` 会先核验两者一致，不一致就报错，不会拿一份不属于这个检查点的快照去对比。
 
 ## 路线图
 
 - **m1 — 播种世界**（已完成）：`up` + `status` + 种子清单 + 状态指纹。
-- **m2 — 快照与对比**（已完成，即本版本）：`checkpoint <label>` 在验证前定格世界；`diff <label>` 输出机器可核验的文件 A/C/D、按主键对齐的行级增删改与 schema 变化。
+- **m2 — 快照与对比**（已完成）：`checkpoint <label>` 在验证前定格世界；`diff <label>` 输出机器可核验的文件 A/C/D、按主键对齐的行级增删改、序列推进与 schema 变化。
 - **m3 — 运行与对账**：`run --label <label> -- <verify-cmd>` 串起 checkpoint → 验证 → 对比，渲染终端 + `worldcheck.html` 对账报告，验证命令失败即非零退出；录制完整演示。
 
 ## 许可证

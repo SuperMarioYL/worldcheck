@@ -22,7 +22,7 @@ import (
 
 // version is stamped at build time via -ldflags; the VERSION file is the
 // release source of truth.
-var version = "0.2.0"
+var version = "0.3.0"
 
 func main() {
 	root := newRootCmd()
